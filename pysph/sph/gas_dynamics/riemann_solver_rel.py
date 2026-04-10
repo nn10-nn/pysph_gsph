@@ -8,7 +8,7 @@ HLL = 1
 HLLC = 2
 
 
-def _safe(v, floor=1e-14):
+def _safe(v=0.0, floor=1e-14):
     if v >= 0.0:
         return v if v > floor else floor
     return -((-v) if (-v) > floor else floor)
@@ -112,4 +112,3 @@ def hll_rel(
 HELPERS_REL = [
     _safe, _rel_char_speeds, riemann_solve_rel, rusanov_rel, hll_rel
 ]
-

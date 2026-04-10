@@ -2,22 +2,47 @@
 
 import os
 import sys
+import importlib.util
 from pathlib import Path
 import numpy
 from math import sqrt
+
+# Ensure local source tree is preferred before any pysph imports.
+_repo_root = Path(__file__).resolve().parents[3]
+_repo_root_str = str(_repo_root)
+if _repo_root_str not in sys.path:
+    sys.path.insert(0, _repo_root_str)
+
+# If a non-local pysph was already imported, clear it to avoid mixed imports.
+if 'pysph' in sys.modules:
+    _loaded = getattr(sys.modules['pysph'], '__file__', '') or ''
+    if _repo_root_str not in _loaded:
+        _to_del = [k for k in list(sys.modules.keys())
+                   if k == 'pysph' or k.startswith('pysph.')]
+        for _k in _to_del:
+            del sys.modules[_k]
+
+# Force serial mode to avoid optional MPI/Zoltan import path on environments
+# where parallel extensions are not compiled.
+import pysph  # noqa: E402
+pysph._in_parallel = False
+pysph._has_zoltan = False
+pysph._has_mpi = False
 
 from pysph.base.nnps import DomainManager
 from pysph.examples.gas_dynamics.shocktube_setup import ShockTubeSetup
 try:
     from pysph.sph.gas_dynamics.scheme_rel import GSPHRelScheme
 except ModuleNotFoundError:
-    # Fallback: force using local source tree instead of an older installed
-    # pysph package when running this script directly.
-    repo_root = Path(__file__).resolve().parents[3]
-    repo_root_str = str(repo_root)
-    if repo_root_str not in sys.path:
-        sys.path.insert(0, repo_root_str)
-    from pysph.sph.gas_dynamics.scheme_rel import GSPHRelScheme
+    # Fallback: load module directly from file path to avoid package-resolution
+    # issues under debugger/alternate PYTHONPATH setups.
+    scheme_file = _repo_root / "pysph" / "sph" / "gas_dynamics" / "scheme_rel.py"
+    spec = importlib.util.spec_from_file_location("scheme_rel_local", str(scheme_file))
+    if spec is None or spec.loader is None:
+        raise
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    GSPHRelScheme = mod.GSPHRelScheme
 
 
 dim = 1

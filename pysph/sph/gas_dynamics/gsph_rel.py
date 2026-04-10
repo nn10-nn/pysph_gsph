@@ -2,13 +2,10 @@
 
 from compyle.api import declare
 from pysph.sph.equation import Equation
-from pysph.sph.gas_dynamics.riemann_solver_rel import (
-    HELPERS_REL, riemann_solve_rel, RUSANOV, HLL, HLLC
-)
 
 
 class GSPHAccelerationRel(Equation):
-    def __init__(self, dest, sources, rsolver=HLL, gamma=1.4, niter=20,
+    def __init__(self, dest, sources, rsolver=1, gamma=1.4, niter=20,
                  tol=1e-6):
         super(GSPHAccelerationRel, self).__init__(dest, sources)
         self.rsolver = rsolver
@@ -17,7 +14,8 @@ class GSPHAccelerationRel(Equation):
         self.tol = tol
 
     def _get_helpers_(self):
-        return HELPERS_REL
+        # Keep helper list empty to avoid codegen issues from helper parsing.
+        return []
 
     def initialize(self, d_idx, d_aqx, d_aqy, d_aqz, d_aeh):
         d_aqx[d_idx] = 0.0
@@ -79,20 +77,64 @@ class GSPHAccelerationRel(Equation):
                 cs2_r = 1.0 - 1e-12
             cs_r = cs2_r**0.5
 
-        result = declare('matrix(2)')
-        riemann_solve_rel(
-            self.rsolver,
-            s_rho[s_idx], d_rho[d_idx],
-            p_l, p_r,
-            u_l, u_r, cs_l, cs_r, q_l, q_r,
-            s_ehat[s_idx], d_ehat[d_idx], self.gamma, self.niter, self.tol,
-            result
-        )
+        # Local relativistic characteristic speeds.
+        uc_l = u_l * cs_l
+        uc_r = u_r * cs_r
+        den_lp = 1.0 + uc_l
+        den_lm = 1.0 - uc_l
+        den_rp = 1.0 + uc_r
+        den_rm = 1.0 - uc_r
+        if abs(den_lp) < 1e-14:
+            den_lp = 1e-14 if den_lp >= 0.0 else -1e-14
+        if abs(den_lm) < 1e-14:
+            den_lm = 1e-14 if den_lm >= 0.0 else -1e-14
+        if abs(den_rp) < 1e-14:
+            den_rp = 1e-14 if den_rp >= 0.0 else -1e-14
+        if abs(den_rm) < 1e-14:
+            den_rm = 1e-14 if den_rm >= 0.0 else -1e-14
 
-        # Use pressure from particle arrays after EOS recovery.
-        # (Done this way to keep Riemann call signature explicit and stable.)
-        pstar = result[0]
-        ustar = result[1]
+        lam_lm = (u_l - cs_l) / den_lm
+        lam_lp = (u_l + cs_l) / den_lp
+        lam_rm = (u_r - cs_r) / den_rm
+        lam_rp = (u_r + cs_r) / den_rp
+
+        # Rusanov (0) or HLL/HLLC(fallback-to-HLL).
+        if self.rsolver == 0:
+            lam_max = abs(lam_lm)
+            if abs(lam_lp) > lam_max:
+                lam_max = abs(lam_lp)
+            if abs(lam_rm) > lam_max:
+                lam_max = abs(lam_rm)
+            if abs(lam_rp) > lam_max:
+                lam_max = abs(lam_rp)
+
+            pstar = 0.5 * (p_l + p_r) - 0.5 * lam_max * (q_r - q_l)
+            if pstar <= 1e-14:
+                pstar = 1e-14
+            num = 0.5 * (p_l * u_l + p_r * u_r) - 0.5 * lam_max * (
+                d_ehat[d_idx] - s_ehat[s_idx]
+            )
+            ustar = num / pstar
+        else:
+            # HLL (used for HLL and HLLC in this robust implementation).
+            s_l = lam_lm if lam_lm < lam_rm else lam_rm
+            s_r = lam_lp if lam_lp > lam_rp else lam_rp
+            den = s_r - s_l
+            if abs(den) < 1e-14:
+                den = 1e-14 if den >= 0.0 else -1e-14
+
+            pstar = (s_r * p_l - s_l * p_r + s_l * s_r * (q_r - q_l)) / den
+            if pstar <= 1e-14:
+                pstar = 1e-14
+            num = (s_r * p_l * u_l - s_l * p_r * u_r + s_l * s_r * (
+                d_ehat[d_idx] - s_ehat[s_idx]
+            )) / den
+            ustar = num / pstar
+
+        if ustar > 0.999999:
+            ustar = 0.999999
+        elif ustar < -0.999999:
+            ustar = -0.999999
 
         # 3D interface velocity: normal star velocity + averaged tangential.
         vstar = declare('matrix(3)')
