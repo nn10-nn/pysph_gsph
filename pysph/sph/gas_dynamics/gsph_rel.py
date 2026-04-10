@@ -25,9 +25,11 @@ class GSPHAccelerationRel(Equation):
         d_aqz[d_idx] = 0.0
         d_aeh[d_idx] = 0.0
 
-    def loop(self, d_idx, d_rho, d_p, d_u, d_v, d_w, d_qx, d_qy, d_qz, d_ehat,
+    def loop(self, d_idx, d_rho, d_p, d_chi, d_hhat, d_rho_rest, d_gamma_ad,
+             d_u, d_v, d_w, d_qx, d_qy, d_qz, d_ehat,
              d_aqx, d_aqy, d_aqz, d_aeh,
-             s_idx, s_m, s_rho, s_p, s_u, s_v, s_w, s_qx, s_qy, s_qz, s_ehat,
+             s_idx, s_m, s_rho, s_p, s_chi, s_hhat, s_rho_rest, s_gamma_ad,
+             s_u, s_v, s_w, s_qx, s_qy, s_qz, s_ehat,
              d_cs, s_cs,
              XIJ, RIJ, EPS, DWI, DWJ):
         eij = declare('matrix(3)')
@@ -47,12 +49,42 @@ class GSPHAccelerationRel(Equation):
         q_l = s_qx[s_idx]*eij[0] + s_qy[s_idx]*eij[1] + s_qz[s_idx]*eij[2]
         q_r = d_qx[d_idx]*eij[0] + d_qy[d_idx]*eij[1] + d_qz[d_idx]*eij[2]
 
+        # Conservative-to-primitive safety fallback for p, cs:
+        # use p = chi * D if pressure is non-physical/undefined.
+        p_l = s_p[s_idx]
+        p_r = d_p[d_idx]
+        if p_l <= 1e-14:
+            p_l = max(s_chi[s_idx] * s_rho[s_idx], 1e-14)
+        if p_r <= 1e-14:
+            p_r = max(d_chi[d_idx] * d_rho[d_idx], 1e-14)
+
+        cs_l = s_cs[s_idx]
+        cs_r = d_cs[d_idx]
+        if cs_l <= 1e-14:
+            cs2_l = s_gamma_ad[s_idx] * p_l / max(
+                s_rho_rest[s_idx] * s_hhat[s_idx], 1e-14
+            )
+            if cs2_l < 0.0:
+                cs2_l = 0.0
+            if cs2_l > 1.0 - 1e-12:
+                cs2_l = 1.0 - 1e-12
+            cs_l = cs2_l**0.5
+        if cs_r <= 1e-14:
+            cs2_r = d_gamma_ad[d_idx] * p_r / max(
+                d_rho_rest[d_idx] * d_hhat[d_idx], 1e-14
+            )
+            if cs2_r < 0.0:
+                cs2_r = 0.0
+            if cs2_r > 1.0 - 1e-12:
+                cs2_r = 1.0 - 1e-12
+            cs_r = cs2_r**0.5
+
         result = declare('matrix(2)')
         riemann_solve_rel(
             self.rsolver,
             s_rho[s_idx], d_rho[d_idx],
-            s_p[s_idx], d_p[d_idx],
-            u_l, u_r, s_cs[s_idx], d_cs[d_idx], q_l, q_r,
+            p_l, p_r,
+            u_l, u_r, cs_l, cs_r, q_l, q_r,
             s_ehat[s_idx], d_ehat[d_idx], self.gamma, self.niter, self.tol,
             result
         )

@@ -129,9 +129,14 @@ class GSPHRelScheme(Scheme):
         ]
         props = base_props + extra_props
 
-        output_props = ['x', 'y', 'z', 'u', 'v', 'w', 'rho', 'rho_rest',
-                        'p', 'e', 'cs', 'qx', 'qy', 'qz', 'ehat', 'chi',
-                        'gamma_rel', 'hhat', 'm', 'h']
+        output_props = [
+            'x', 'y', 'z', 'u', 'v', 'w',
+            'rho', 'rho_rest', 'p', 'e', 'cs',
+            'qx', 'qy', 'qz', 'ehat', 'chi',
+            'gamma_rel', 'hhat', 'gamma_ad',
+            'aqx', 'aqy', 'aqz', 'aeh',
+            'm', 'h'
+        ]
 
         for fluid in self.fluids:
             pa = particle_arrays[fluid]
@@ -148,4 +153,3 @@ class GSPHRelScheme(Scheme):
             self._ensure_properties(pa, solid_props, clean)
             pa.gamma_ad[:] = self.gamma
             pa.set_output_arrays(output_props)
-

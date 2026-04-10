@@ -1,12 +1,23 @@
 """1D SRHD Sod shock tube (paper setup) with standalone GSPHRelScheme."""
 
 import os
+import sys
+from pathlib import Path
 import numpy
 from math import sqrt
 
 from pysph.base.nnps import DomainManager
 from pysph.examples.gas_dynamics.shocktube_setup import ShockTubeSetup
-from pysph.sph.gas_dynamics.scheme_rel import GSPHRelScheme
+try:
+    from pysph.sph.gas_dynamics.scheme_rel import GSPHRelScheme
+except ModuleNotFoundError:
+    # Fallback: force using local source tree instead of an older installed
+    # pysph package when running this script directly.
+    repo_root = Path(__file__).resolve().parents[3]
+    repo_root_str = str(repo_root)
+    if repo_root_str not in sys.path:
+        sys.path.insert(0, repo_root_str)
+    from pysph.sph.gas_dynamics.scheme_rel import GSPHRelScheme
 
 
 dim = 1
@@ -17,6 +28,14 @@ tf = 0.5
 
 
 class SodShockTubeRel(ShockTubeSetup):
+    def __init__(self, *args, **kwargs):
+        super(SodShockTubeRel, self).__init__(*args, **kwargs)
+        # Safe defaults so create_scheme() can be called before
+        # consume_user_options().
+        self.hdx = 1.2
+        self.nl = 640
+        self.dscheme = "constant_mass"
+
     def initialize(self):
         # Problem setup from the provided figure:
         # x in [0, 1], discontinuity at x=0.5, t in [0, 0.5].
@@ -92,9 +111,10 @@ class SodShockTubeRel(ShockTubeSetup):
         self.scheme.configure_solver(tf=self.tf, dt=self.dt)
 
     def create_scheme(self):
+        kf = getattr(self, "hdx", 1.2)
         return GSPHRelScheme(
             fluids=['fluid'], solids=[], dim=dim, gamma=gamma,
-            kernel_factor=self.hdx, rsolver=1, niter=20, tol=1e-8
+            kernel_factor=kf, rsolver=1, niter=20, tol=1e-8
         )
 
     def post_process(self):
@@ -143,8 +163,14 @@ class SodShockTubeRel(ShockTubeSetup):
 
         fname = os.path.join(self.output_dir, 'results_rel.npz')
         numpy.savez(
-            fname, x=x, u=u, D=D, p=p, qx=pa.qx, ehat=pa.ehat,
-            chi=pa.chi, gamma_rel=pa.gamma_rel, rho_rest=pa.rho_rest
+            fname,
+            # metadata
+            t=self.tf, gamma=gamma, xmin=self.xmin, xmax=self.xmax, x0=self.x0,
+            # primitive
+            x=x, u=pa.u, v=pa.v, w=pa.w, p=pa.p, rho_rest=pa.rho_rest,
+            e=pa.e, cs=pa.cs, hhat=pa.hhat, gamma_rel=pa.gamma_rel,
+            # conservative
+            D=pa.rho, qx=pa.qx, qy=pa.qy, qz=pa.qz, ehat=pa.ehat, chi=pa.chi
         )
 
 
