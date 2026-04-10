@@ -1,0 +1,173 @@
+\chapter{基于近似黎曼求解器的 SRHD-GSPH 模型}
+
+\section{SRHD-GSPH 方法构造与变量定义}
+
+本章采用自然单位制 $c=1$，考虑狭义相对论理想流体在实验室系中的拉格朗日形式
+\begin{equation}
+\frac{dD}{dt}=-D\nabla\cdot\boldsymbol{v},\qquad
+\frac{d\boldsymbol{q}}{dt}=-\frac{1}{D}\nabla p,\qquad
+\frac{d\hat{e}}{dt}=-\frac{1}{D}\nabla\cdot(p\boldsymbol{v}),
+\end{equation}
+其中
+\begin{equation}
+D=\Gamma\rho,\quad
+\Gamma=(1-v^2)^{-1/2},\quad
+\boldsymbol{q}=\hat{h}\Gamma\boldsymbol{v},\quad
+\hat{e}=\hat{h}\Gamma-\frac{p}{D},\quad
+\hat{h}=1+\varepsilon+\frac{p}{\rho}.
+\end{equation}
+为避免符号混用，本文统一约定：$D$ 为实验室系密度，$\rho$ 为静止系密度，$\hat{e}$ 为守恒能量变量。
+
+原始变量到守恒变量的初始化转换为
+\begin{equation}
+D=\Gamma\rho,\quad
+\boldsymbol{q}=\hat{h}\Gamma\boldsymbol{v},\quad
+\hat{e}=\hat{h}\Gamma-\frac{p}{D},\quad
+\hat{h}=1+\varepsilon+\frac{p}{\rho},\quad
+p=(\gamma-1)\rho\varepsilon.
+\end{equation}
+
+\section{GSPH 离散格式与一阶界面构造}
+
+本文采用一阶 GSPH（无二阶重构、无斜率限制器），粒子对离散更新式为
+\begin{equation}
+\dot{\boldsymbol{q}}_a
+=-\sum_{b\in N(a)}M_b p_{ab}^{*}
+\left(\frac{1}{D_a^2}\nabla W_{ab}(h_a)+\frac{1}{D_b^2}\nabla W_{ab}(h_b)\right),
+\end{equation}
+\begin{equation}
+\dot{\hat{e}}_a
+=-\sum_{b\in N(a)}M_b p_{ab}^{*}\boldsymbol{v}_{ab}^{*}\!\cdot\!
+\left(\frac{1}{D_a^2}\nabla W_{ab}(h_a)+\frac{1}{D_b^2}\nabla W_{ab}(h_b)\right).
+\end{equation}
+
+对任意粒子对 $(a,b)$，定义法向
+\begin{equation}
+\boldsymbol{n}_{ab}=\frac{\boldsymbol{x}_a-\boldsymbol{x}_b}{|\boldsymbol{x}_a-\boldsymbol{x}_b|},\quad
+u_R=\boldsymbol{v}_a\cdot\boldsymbol{n}_{ab},\quad
+u_L=\boldsymbol{v}_b\cdot\boldsymbol{n}_{ab}.
+\end{equation}
+一阶左右状态直接取粒子值
+\begin{equation}
+Q_{L,ab}=(\rho_b,u_L,p_b)^T,\qquad
+Q_{R,ab}=(\rho_a,u_R,p_a)^T.
+\end{equation}
+界面速度写为
+\begin{equation}
+\boldsymbol{v}_{ab}^{*}
+=u_{ab}^{*}\boldsymbol{n}_{ab}
+\left[\frac{\boldsymbol{v}_a+\boldsymbol{v}_b}{2}
+-\frac{u_L+u_R}{2}\boldsymbol{n}_{ab}\right].
+\end{equation}
+
+\section{近似黎曼求解器（相对论波速）}
+
+相对论特征速度取
+\begin{equation}
+\lambda_{\pm}(u,c_s)=\frac{u\pm c_s}{1\pm uc_s},\qquad
+c_s^2=\frac{\gamma p}{\rho\hat{h}},\quad 0\le c_s<1.
+\end{equation}
+
+\subsection{Rusanov}
+\begin{equation}
+\lambda_{\max}=
+\max\!\left(|\lambda_-(U_L)|,|\lambda_+(U_L)|,|\lambda_-(U_R)|,|\lambda_+(U_R)|\right),
+\end{equation}
+\begin{equation}
+p^*=\frac12\!\left[p_L+p_R-\lambda_{\max}(q_R-q_L)\right],\quad
+u^*=\frac{p_Lu_L+p_Ru_R-\lambda_{\max}(\hat{e}_R-\hat{e}_L)}{2p^*}.
+\end{equation}
+
+\subsection{HLL}
+\begin{equation}
+S_L=\min\{\lambda_-(U_L),\lambda_-(U_R)\},\qquad
+S_R=\max\{\lambda_+(U_L),\lambda_+(U_R)\},
+\end{equation}
+\begin{equation}
+p^*=\frac{S_Rp_L-S_Lp_R+S_LS_R(q_R-q_L)}{S_R-S_L},
+\end{equation}
+\begin{equation}
+u^*=
+\frac{S_Rp_Lu_L-S_Lp_Ru_R+S_LS_R(\hat{e}_R-\hat{e}_L)}
+{(S_R-S_L)p^*}.
+\end{equation}
+
+\subsection{HLLC（闭合表达）}
+取同样的 $S_L,S_R$，定义
+\begin{equation}
+m_K=D_K(S_K-u_K),\quad K=L,R,
+\end{equation}
+由动量跳跃条件可得接触波速
+\begin{equation}
+S^*=\frac{p_R-p_L+m_Lu_L-m_Ru_R}{m_L-m_R},
+\end{equation}
+中间压力
+\begin{equation}
+p^*=p_L+m_L(S^*-u_L)=p_R+m_R(S^*-u_R).
+\end{equation}
+实际实现中若出现 $m_L\approx m_R$ 或 $p^*<0$，退化到 HLL 以保证鲁棒性。
+
+\section{一阶时间推进与原始变量恢复}
+
+\subsection{守恒量推进}
+\begin{equation}
+\boldsymbol{q}_a^{n+1}=\boldsymbol{q}_a^n+\Delta t\,\dot{\boldsymbol{q}}_a,\qquad
+\hat{e}_a^{n+1}=\hat{e}_a^n+\Delta t\,\dot{\hat{e}}_a.
+\end{equation}
+
+\subsection{由 $(\boldsymbol{q},\hat{e})$ 恢复 $\chi,\boldsymbol{v},\Gamma,\hat{h}$}
+引入
+\begin{equation}
+\chi=\frac{p}{D},\qquad A=\hat{e}+\chi=\hat{h}\Gamma,\qquad \boldsymbol{q}=A\boldsymbol{v}.
+\end{equation}
+记 $q^2=\boldsymbol{q}\cdot\boldsymbol{q}$，则
+\begin{equation}
+f(\chi)=q^2+(\hat{e}+\chi)\!\left(\frac{\chi}{\gamma-1}-\hat{e}\right)
++\sqrt{(\hat{e}+\chi)^2-q^2}=0.
+\end{equation}
+Newton 迭代
+\begin{equation}
+\chi^{(m+1)}=\chi^{(m)}-\frac{f(\chi^{(m)})}{f'(\chi^{(m)})},
+\end{equation}
+\begin{equation}
+f'(\chi)=\frac{2\chi+(2-\gamma)\hat{e}}{\gamma-1}
++\frac{\hat{e}+\chi}{\sqrt{(\hat{e}+\chi)^2-q^2}},
+\end{equation}
+并使用阻尼确保 $\chi>0,\ (\hat{e}+\chi)^2>q^2$。
+
+恢复公式
+\begin{equation}
+\boldsymbol{v}=\frac{\boldsymbol{q}}{\hat{e}+\chi},\quad
+\Gamma=\frac{\hat{e}+\chi}{\sqrt{(\hat{e}+\chi)^2-q^2}},\quad
+\hat{h}=\sqrt{(\hat{e}+\chi)^2-q^2}.
+\end{equation}
+
+\subsection{$D,x,p,\rho,\varepsilon$ 更新}
+位置推进采用前后时刻速度平均
+\begin{equation}
+\boldsymbol{x}_a^{n+1}=\boldsymbol{x}_a^n+\frac{\Delta t}{2}
+\left(\boldsymbol{v}_a^n+\boldsymbol{v}_a^{n+1}\right).
+\end{equation}
+实验室系密度不由显式连续方程推进，而由核求和重算：
+\begin{equation}
+\widetilde{D}_a^{n+1}=\sum_b M_bW(\boldsymbol{x}_{ab}^{n+1},C_{\rm smooth}h_a^n),\ 
+h_a^{n+1}=k\left(\frac{M_a}{\widetilde{D}_a^{n+1}}\right)^{1/d},\ 
+D_a^{n+1}=\sum_bM_bW(\boldsymbol{x}_{ab}^{n+1},h_a^{n+1}).
+\end{equation}
+最后
+\begin{equation}
+p_a^{n+1}=\chi_a^{n+1}D_a^{n+1},\qquad
+\rho_a^{n+1}=\frac{D_a^{n+1}}{\Gamma_a^{n+1}},\qquad
+\varepsilon_a^{n+1}=\hat{h}_a^{n+1}-1-\frac{p_a^{n+1}}{\rho_a^{n+1}}.
+\end{equation}
+
+\subsection{CFL 时间步}
+\begin{equation}
+\Delta t=C_{\rm CFL}\min_a\frac{h_a}{\max_{b\in N(a)}\left(|\lambda_+|,|\lambda_-|\right)},
+\quad \lambda_{\pm}=\frac{u_n\pm c_s}{1\pm u_nc_s},\quad 0<C_{\rm CFL}<1.
+\end{equation}
+
+\section{本章小结}
+
+本章给出与代码实现一致的一阶 SRHD-GSPH 算法：一阶界面构造、相对论波速下的近似黎曼求解、守恒量推进、以及基于 $\chi$ 的原始变量恢复。关键修正点包括：统一 $D/\rho$ 定义、统一能量符号 $\hat{e}$、补全波速与 CFL 表达、并给出可实现的 HLLC 闭合及退化策略。由此可形成“可复现、可编程、可验证”的第四章算法主体。
+

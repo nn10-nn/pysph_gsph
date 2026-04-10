@@ -1,0 +1,660 @@
+          Draft version October 18, 2025
+          Typeset using LATEX twocolumn style in AASTeX7.0.1
+
+
+
+
+1                     Special-relativistic Godunov-type Smooth Particle Hydrodynamics (GSPH)
+
+2                                           Nan Wang,1 Xin Lei         ,1, ∗ and Junfang Zhao1
+3
+                       1 School of Science, China University of Geosciences, Beijing 100083, People’s Republic of China
+
+
+
+                                                                ABSTRACT
+4               This example manuscript is intended to serve as a tutorial and template for authors to use when
+5            writing their own AAS Journal articles. This manuscript includes many figure and table examples to
+6            illustrate these new features. Information on features not explicitly mentioned in the article can be
+7            viewed in the manuscript comments or more extensive online documentation. Authors are welcome
+8            replace the text, tables, figures, and bibliography with their own and submit the resulting manuscript
+9            to the AAS Journals peer review system. The first lesson in the tutorial is to remind authors that
+10           the AAS Journals, the Astrophysical Journal (ApJ), the Astrophysical Journal Letters (ApJL), the
+11           Astronomical Journal (AJ), and the Planetary Science Journal (PSJ) all have a 250 word limit for the
+12           abstract. The limit is 150 for RNAAS manuscripts. If you exceed this length the Editorial oﬀice will
+13           ask you to shorten it. This abstract has 189 words.
+
+
+14           Keywords: Hydrodynamical simulations (767) — Relativistic fluid dynamics (1389) — Hydrodynamics
+15                     (1963)
+
+16                      1. INTRODUCTION                                40   solution to a non-linear Riemann problem (Godunov’s
+17         Smoothed Particle Hydrodynamics (SPH) is a                  41   method) at an imaginary interface between an interact-
+18   mesh-free particle method for the numerical solution of           42   ing particle pair. The scheme was dubbed the Godunov
+19   the equations of continuum physics. It has evolved con-           43   SPH (GSPH) and is attractive because it eliminates
+20   siderably since the pioneering work of Gingold and Mon-           44   parametrization and hence, user intervention, typically
+21   aghan [1], who used it as anumerical tool for astrophys-          45   associated with the SPH artificial viscosity. Moreover,
+22   ical problems. SPH has been found suitable for prob-              46   the dissipation introduced by GSPH can be thought of
+23   lems in compressible hydrodynamics [2-6], astrophysics            47   as a “generalized” SPH artificial viscosity. Indeed, the
+24   [7-9] and magneto-hydrodynamics [10-14]. Despite re-              48   popular “signal” based artificial viscosity proposed by
+25   cent [15,16] and historical [17-19] interest in artificial vis-   49   Monaghan [20] can be interpreted as a GSPH viscosity
+26   cosity, SPH is often criticized for relying on an explicit        50   using Roe’s approximate Riemann solver (see Section
+27   artificial viscosity to stabilize the scheme. The viscosity       51   4). This relation to artificial viscosity aids in under-
+28   is typically added as a viscous pressure to the momen-            52   standing the nature of solutions generated with GSPH.
+29   tum equation to dissipate kinetic energy at shocks. De-           53   Conversely, the investigation into approximate Riemann
+30   pending upon the perspective, the form of the viscosity           54   solvers can be used to study the artificial viscosity em-
+31   can be thought of as either a von Neumann type vis-               55   ployed in SPH. The GSPH method has been success-
+32   cous pressure [2], a source of entropy [9],or wave jumps          56   fully applied to problems in compressible hydrodynam-
+33   across suitably defined eigenvectors as an analogy with           57   ics [21-23] and magneto-hydrodynamicswith the Method
+34   Riemann solvers [20,14].                                          58   of Characteristics (MOC) [13]. We have found GSPH to
+35         A novel approach was taken by Inutsuka [21] who             59   be robust and as accurate as the Monaghan, Price and
+36   developed an artificial-viscosity-free SPH scheme, by a           60   Morris (MPM) scheme [20,14] for the compressible Euler
+37   reformulation of the SPH convolution integrals. The               61   equations [24].
+38   scheme introduces the minimum and suﬀicient amount                62         In GSPH, a one-dimensional Riemann problem
+39   of dissipation in the equations by using an iterative             63   is solved between interacting particles, by considering
+                                                                       64   them to define equivalent left and right states abut-
+                                                                       65   ting an imaginary interface normal to the line joining
+     Email: xinlei@cugb.edu.cn                                         66   them. The Riemann solver is used to determine the in-
+      ∗ Corresponding author.
+                                                                       67   termediate pressure, p∗ and velocity, u∗ , which is used
+      2
+
+68    in the GSPH equations of motion. A time consuming            119   ible flows. In these schemes, Riemann problems are
+69    operation for the GSPH solution procedure is the ex-         120   solved on moving control volumes similar to the Fi-
+70    act solution of the non-linear Riemann problem for ev-       121   nite Volume Particle Method [36]. Typical implementa-
+71    ery interacting particle pair. The number of neighbors       122   tions of SPH-ALE use the HLLC approximate Riemann
+72    for a particle scale with the smoothing length, which        123   solver [27] with second order, MUSCL-type reconstruc-
+73    is usually adaptively adjusted to the local particle vol-    124   tions [37,38,39]. The principle advantage sought from
+                         d1
+                                                                   125   the SPH-ALE scheme is a robust treatment of bound-
+74    ume as h ≈ η m     ρ    , where d is the number of di-
+                                                                   126   ary conditions for incompressible flow calculations. In
+75    mensions. For an SPH kernel, the number of neigh-            127   contrast, our test problems are idealized in the sense
+76    bors N can be heuristically estimated as 2ζ η, π(ζ η)2       128   that while the boundary conditions are simpler, the com-
+77    and 43 π(ζ η)3 in one, two and three dimensions respec-      129   pressible nature of the flow imposes a more stringent
+78    tively, where ζ is the kernel scaling factor (ζ = 3 for      130   requirement on the discretization. We therefore do not
+79    the Gaussian) [14]. Comparing with finite volume com-        131   consider the SPH-ALE scheme in our discussions.
+80    putations, GSPH requires the solution of an order of         132        This paper is organized as follows. In Section 2, we
+81    magnitude more Riemann problems per computational            133   describe the GSPH procedure, motivating the need for
+82    element. Furthermore, the solutions are weighted with        134   the solution to the Riemann problem. Section 3 briefly
+83    the kernel gradient which means that we must expend          135   describes the different Riemann solvers we have used.
+84    the same computational effort for neighbors suﬀiciently      136   We proceed to a discussion on the results using these
+85    far away although they have a minimal contribution.          137   schemes in Section 5. Finally, we conclude with a sum-
+86    Thus, significant gains in eﬀiciency can be obtained if      138   mary and suggestions for using approximate solvers for
+87    we forgo the exact solution of the Riemann problem in        139   different problems in Section 6.
+88    favor of an approximation, subject to the same stabil-
+89    ity and accuracy requirements. Approximate Riemann           140          2. SPH AND GODUNOV SPH (GSPH)
+90    solvers, pioneered by Roe [25] have been widely used by
+91    the CFD community as an eﬀicient alternative to ex-          141       In a fixed frame, the equations of special relativistic
+92    act solutions. Moreover, the exact solution to the non-      142   hydrodynamics (SRHD) for an ideal fluid can be writ-
+93    linear equations is often unknown or intractable which       143   ten as the conservation laws of mass, momentum and
+94    necessitates approximate solutions. This is our primary      144   energy:
+95    motivation for an investigation into using approximate                                dD
+96    Riemann solvers for GSPH solutions to the compress-          145                           = −D∇ · v,                     (1a)
+                                                                                            dt
+97    ible Euler equations. CFD is abound with approximate                                  dq      1
+98    solvers for the Euler equations and these are historically   146                           = − ∇p,                        (1b)
+                                                                                             dt     D
+99    well documented [26,27,28]. For our GSPH implemen-                                     dê    1
+100   tation, we are interested in the approximate solution to     147                           = − ∇ · (pv),                  (1c)
+                                                                                             dt     D
+101   the Riemann problem in Lagrangian coordinates. To
+102   this end, we use the Lax-Friedrichs [29], HLLE [30], Roe     148   where dtd    ∂
+                                                                                   = ∂t  + v · ∇ is the material derivative, p is the
+103   [25], Ducowicz [31] and HLLC [32,33] approximate Rie-        149   pressure in the fluid local rest frame, D, q and ê define,
+104   mann solvers when applied to canonical test problems         150   respectively, the rest mass density, momentum and total
+105   in 1 and 2 dimensions. While this paper was under re-        151   energy (including mass energy) per unit mass measured
+106   view, Sirotkin and Yoh [34] have published results for       152   in the fixed frame, where the fluid has velocity v. In
+107   SPH with approximate Riemann solvers for simulating          153   this paper, units are conveniently normalized so that the
+108   explosions. Their derivation is based on discretizing the    154   speed of light is c = 1. In the fluid local rest frame, the
+109   divergence of the flux vector using SPH approximation        155   fluid can be described in terms of its Lorentz-invariant
+110   techniques and subsequently using the Lax-Friedrichs         156   thermodynamic quantities: the proper rest mass den-
+111   and HLL approximate Riemann solvers to evaluate the          157   sity ρ, the specific enthalpy ĥ = 1 + ϵ + p/ρ (ϵ being
+112   fluxes between particle pairs. This differs from the ap-     158   the specific internal energy), and the pressure p. The
+113   proach adopted herein where we use the GSPH frame-           159   transformation between the two frames of reference is
+114   work to introduce and study the dissipation introduced       160   given by:
+115   through approximate Riemann solvers.
+116         We would like to point out that Vila [35] had de-      161                          D = ρΓ,                         (2a)
+117   veloped a particle weighting scheme (SPH-ALE) which          162                          q = ĥΓv,                       (2b)
+118   is commonly used for SPH simulations for incompress-
+                                                                   163                           ê = ĥΓ − χ,                  (2c)
+                                                                                                                                         3
+                  √
+164   where Γ = 1/ 1 − v 2 is the Lorentz factor and χ =              199   the solution. The lower bound of the physically allowed
+165   p/D. And Eq. (1a) is equivalent to                              200   domain, χmin , defined by
+
+                            dV  1                                     201                          χmin = (|q| − ê),                  (10)
+166                            = ∇ · v,                        (3)
+                            dt  D
+                                                                      202   is obtained from (8) by taking into account that (in our
+167   where V = 1/D is the specific proper volume.                    203   units) |v| < 1. Knowing χ, p = χD and Eq. (8) di-
+168       The system of Eqs. (1a)-(1c) is completed by an             204   rectly gives v, while ρ are straightforwardly obtained
+169   equation of state (EOS). The theory of relativistic ideal       205   from Eqs. (7b) and (2a). Since γ ∈ (1, 2] and then
+170   gases shows that the specific enthalpy is a function of
+                                                                                                        2
+171   the a temperature-like variable Θ = p/ρ = χΓ alone                                                p
+      and it takes the form                                                      ê − q − 1 = ϵ + 2ϵ −
+                                                                                  2     2          2
+                                                                                                            v2
+172
+                                                                      206
+                                                                                                        ρ                              (11)
+                                                                                              |v|<1                     γ∈(1,2]
+                                    K3 (1/Θ)                                                   > 2ϵ + γ(2 − γ)ϵ2          >       0,
+173                       ĥ(Θ) =            ,                 (4)
+                                    K2 (1/Θ)
+                                                                      207   we can show that the function Φ(χ) is strictly monoton-
+174   where K2 and K3 are the modified Bessel functions of            208   ically increasing with respect to χ ∈ [0, +∞). Moreover,
+175   the second and third kind, respectively.                        209   Φ(0) < 0 and lim Φ(χ) = +∞. This yields Eq. (9)
+176        The most widely used and popular one relies on the                               χ→+∞
+
+177   choice of the constant γ-law EOS                                210   admits a unique positive solution, which is the true value
+                                                                      211   χ(U ). A natural idea is to directly solve Eq. (9) by using
+                                      γ                                     the Newton-Raphson (NR) method. Unfortunately, the
+178                      ĥ(Θ) = 1 +     Θ,                    (5)    212
+
+                                     γ−1                              213   numerical experiments in Y. Chen & K. Wu (2022) indi-
+                                                                      214   cate that the convergence of such a NR method requires
+179   where γ ∈ (1, 2] is the constant specific heat ratio.
+                                                                      215   a good initial guess, and the approximate pressure may
+180        In the SPH code of SRHD evolving the conservative
+                                                                      216   become negative during the NR iterations. We adopt
+181   variables U = (D, q, ê)⊤ in time, the variables Q =
+                                                                      217   the hybrid NR method in C. Cai et al. (2024) in Ap-
+182   (ρ, v, p)⊤ have to be computed from the conservative
+                                                                      218   pendix A.
+183   variables at least once per time step. In our approach,
+                                                                      219        The relativistic mass M is defined by
+184   this is achieved using relations (2a)-(2c) and EOS to
+                                                                                              Z
+185   construct the function
+                                                                      220                        DdV = M = Γm0 ,                   (12)
+                              1                                                              Ω
+186                  Φ(χ) =       ĥ(χΓ∗ ) − ĥ∗ ,          (6)
+                              Γ∗                                      221   where m0 is the rest mass.
+                                                                      222        In SPH, points or “particles” are used as the com-
+187   with ĥ∗ and Γ∗ given by                                        223   putational elements for the numerical discretization of
+                                  ê + χ                              224   Eqs. (1). The discretization is written as a weighted
+188                         ĥ∗ =         ,                   (7a)    225   summation of pairwise interactions between particles,
+                                     Γ∗
+                                        1                             226   which can be thought to represent the “flux” contribu-
+189                         Γ∗ = p            ,               (7b)    227   tions as expressed by the governing equations.
+                                      1 − v∗2
+                                                                      228        SPH as an interpolation technique is used to repre-
+190   respectively, where                                             229   sent field functions through convolutions with a smooth
+                                                                      230   approximation to the Dirac delta distribution function,
+                                      q
+191                           v∗ =        .                    (8)    231   referred to as the kernel. We refer the interested reader
+                                   ê + χ                             232   to [40] and [14] for a detailed exposition on the SPH
+192   Then, as shown in K. Wu & H. Tang (2015), the true              233   kernel interpolation theory. An important example of
+193   value χ(U ) corresponding to a conservative vector U            234   kernel interpolation is the estimation of the density field
+194   satisfies the following nonlinear algebraic equation:           235   represented by a set of particles. This is expressed as:
+                 s                                                                                     X
+                            q2          χ              q2             236               D(x) =               Mb W (x − xb , h)         (13)
+195    Φ(χ) = 1 −                  +         − ê +        = 0. (9)
+                        (ê + χ)
+                                 2   (γ − 1)        ê + χ                                         b∈N (x)
+
+                                                                      237        In this equation, W is a positive, symmetric weight-
+196   The zero of Φ(χ) in the physically allowed domain               238   ing function (kernel) that has the dimensions of inverse
+197   χ ∈ (χmin , ∞) determines the pressure, the monotonic-          239   volume. The equation is to be interpreted in the follow-
+198   ity of Φ(χ) in that domain ensuring the uniqueness of           240   ing sense. The density at a point x, is estimated by a
+      4
+
+241   weighted sum of individual particle masses in a neigh-           276   if we make the crude approximation W (x′ − xb , h) ≈
+242   borhood N (x), about the point. The kernel parameter             277   δ(x − xb , h). From this perspective, the GSPH interpo-
+243   ζ, and particle smoothing length or smoothing scale [41]         278   lation is similar to restoring particle consistency in the
+244   h, determine the number of neighbors over which to per-          279   discrete equations. In like manner, for the equations
+245   form the summation as shown in Fig. 1. In this work,             280   of motion, Eqs. (1c) and (1d) are convolved and subse-
+246   we use the truncated Gaussian kernel (ζ = 3):                    281   quently augmented with the consistency conditions to
+                                                                      282   give
+                             1 e−q 0 ≤ q ≤ 3
+                                      2
+
+247             W (q, h) = d                             (14)                                           Z
+                           π 2 hd  0     otherwise                                       X                 p(x)
+                                                                       283   q̇a = −               Mb              (W (x − xb )∇W (x − xa , h) − W (x − xa
+                                                                                                            D2 (x)
+248   where q = |x|h is the normalized interaction distance, h is
+                                                                                         b∈N (a)
+
+249   the characteristic smoothing length and d is the number                                                                           (18a)
+                                                                                          X             Z
+250   of spatial dimensions.A popular choice is the cubic spline                                            p(x)v(x)
+                                                                       284   ê˙ a = −             Mb                (W (x − xb )∇W (x − xa , h) − W (x −
+251   kernel [24]                                                                                            D2 (x)
+                                                                                         b∈N (a)
+                                                                                                                                       (18b)
+                          
+                          1 − 2 q + 4 q ,      0⩽q⩽1
+                               3 2   3 3
+                          
+                       σ                                               285   The density at the position of a particle is estimated as
+                                                                (15)
+                            4 (2 − q) ,         1⩽q⩽2
+252       W (q, h) =        1        3
+                       hd 
+                                                                                                             X
+                          
+                            0,                  otherwise              286                          Da =               Mb Wab (ha )      (19)
+                                                                                                             b∈N (a)
+253
+                                                        10
+      where σ is the normalizing constant equal to 23 , 7π and
+      1                                                                      which is a direct application of Eq. (19) at the position
+      π in one, two and three dimensions respectively. Higher
+                                                                       287
+254
+
+255   order, spline based approximations are the quartic and           288   of the particle. The introduction of the time centered
+256   quintic spline kernels [22].                                     289   velocity in the GSPH energy equation (10c), represents
+                                                                       290   a ”mixing” for the internal energy which is absent for
+257                       2.1. Godunov SPH                             291   standard SPH. This term is also needed for the discrete
+258        The discrete equations for GSPH can be derived by           292   conservation of the energy.
+259   using either the kernel interpolation theory or via an           293        To arrive at the discrete equations of motion, we
+260   action principle [21]. We follow the former approach to          294   need to evaluate the integrals in Eqs. (7). In the original
+261   elucidate the steps leading to the introduction of the           295   GSPH method, Inutsuka [21] proposed to approximate
+262   Riemann solver.                                                  296   the integrals in two steps. First, a local coordinate sys-
+263        A fundamental construct in GSPH is to utilize               297   tem (s, s⊥ ) is set-up, with the origin at the mid-point of
+264   Eq. (19), to obtain the following discrete consistency           298   the line joining two interacting particles and unit vector
+                                                                                                                       xa −xb
+265   identities:                                                      299   along the line of sight given by r̂ab = |x a −xb |
+                                                                                                                                . An inter-
+                                                                                                                          1
+                                                                       300   polation for the specific volume V (s) = D(s) in this local
+                         X    Mb                                       301   system is used to obtain specific volume contributions
+266               1=              W (x − xb , h)               (16a)
+                             D(x)
+                     b∈N (x)
+                                                                           Z                                                            √
+                       X            W (x − xb , h)                                 1
+267               0=         Mb ∇                              (16b)                  2
+                                                                                        W (x−xb , h)W (x−xa , h) dx ≈ Vab 2
+                                                                                                                            (h)W (xa −xb , 2h)
+                                       D(x)                                    Ω D(x)
+                       b∈N (x)                                         302                                                        (20)
+268   Using these identities, the SPH approximation of a func- 303                The algebraic manipulations leading to this equa-
+269   tion can be recast as                                            304   tion are√only valid for the Gaussian kernel. The scaling
+                Z                                                      305   factor ( 2) for the smoothing length also means we must
+270   ⟨f ⟩(x) ≈     f (x′ )W (x′ − x, h) dx′                           306   use a larger search radius for each particle. The specific
+                ZΩ X                ′                                  307   volume contributions can then be used to evaluate the
+                                f (x )      ′            ′               ′
+271           =             Mb         W (x   − x, h)W (x  − x b , h) dx
+                                                                       308   integral for an arbitrary function f (x) as
+                  Ω            D(x′ )
+                    b∈N (x)
+                                                                (17)         Z                                                                 √
+                                                                                  f (x)                                    ∗
+                                                                                         W (x−xb , h)W (x−xa , h) dx ≈ fab     2
+                                                                                                                             Vab (h)W (xa −xb , 2h)
+272   where we have used the first consistency condition in                   Ω D(x)
+                                                                                       2
+273   Eqs. (5) to result in a modified SPH convolution inte-           309                                                           (21)
+                                                                                      ∗
+274   gral. Inutsuka [21] has pointed out that this expres-            310   where fab   is to be interpreted as the interpolated value
+275   sion reduces to the standard SPH interpolation formula           311   of the function at some position s∗ab , along the line of in-
+                                                                                                                                                      5
+
+312   teraction. Using these expressions, the GSPH equations
+                                                                                           X                                                     
+313   (10) can be written as                                                                                      1                1
+                                                                          345   q̇a = −             Mb p∗ab           ∇Wab (ha ) + 2 ∇Wab (hb )
+                                                                                                                  Da2             Db
+                                                                                          b∈N (a)
+                X             h                    √                        √      i                                                    (26a)
+      q̇a = −           Mb p∗ab Vab 2
+                                      (ha )∇Wab ( 2ha ) + Vab 2
+                                                                (hb )∇Wab ( 2hb )                                                                
+                                                                                          X
+314
+                                                                                                              1                  1
+                b∈N (a)                                                   346 ê˙ a = −         Mb p∗ab vab
+                                                                                                         ∗
+                                                                                                                  ∇W ab (h a ) +     ∇W ab (h b )
+                                                                  (22a)                                       Da2                Db2
+                                                                                        b∈N (a)
+                  X                 h                 √                         √      i
+315   ê˙ a = −                  ∗
+                        Mb p∗ab vab   Vab2
+                                           (ha )∇Wab ( 2ha ) + Vab2
+                                                                    (hb )∇Wab ( 2hb )                                                   (26b)
+                b∈N (a)                                                   347        Note that this formulation admits the use of dif-
+                                                                  (22b) 348 ferent SPH kernels and avoids evaluating the specific
+                                                                          349 volume integrals Eq. (20). Moreover, the resulting
+316
+                                                          ∗     ∗
+      In these equations, the starred quantities (pab , vab ) are         350 evolution equations are very similar to the popular
+317   the intermediate state arising from the solution of a Rie-          351 Monaghan–Price–Morris (MPM) formulation [14]. The
+318
+                                       ∗
+      mann problem and like fab in Eq. (21), represent some               352 results using this simplified formulation were shown to
+319   interpolated value of the variables in the local coordi-            353 be comparable with finite volume codes for one and two
+320
+                                             ∗
+      nate system, at the position sab . Note that in GSPH,               354 dimensional problems in hydrodynamics and magneto-
+321   we solve one-dimensional Riemann problems along the 355 hydrodynamics [23,13]. This suggests a critical role
+322   line joining two particles with the particle a (respectively 356 played by the Riemann solver in the equations of mo-
+323   b) defining the right (left) state in the local coordinate 357 tion. This is discussed next.
+324   system. For input to the Riemann solver, the particle               358               2.2. The role of the Riemann solver
+325   velocities are projected upon r̂ab as
+                                                                          359         From the derivation of the GSPH equations of mo-
+                                                                          360   tion (Eqs. (11)), it is apparent that the starred vari-
+                                                                          361   ables (p∗ , v ∗ ), represent the interpolated pressure and
+326                             ur = va · r̂ab                   (23a)    362   velocity, at some point along the line joining an inter-
+327                               ul = vb · r̂ab                 (23b)    363   acting particle pair. In effect, there is no compulsion
+                                                                          364   to consider them as the intermediate state generated
+328   The resulting scalar intermediate velocity u∗ab , is used to        365   as a solution to the Riemann problem between the two
+329   define the vector intermediate velocity used in Eq. (22b)           366   particles. The ansatz however, provides the necessary
+330   as                                                                  367   and suﬀicient dissipation needed to stabilize the scheme.
+                                                                          368   Monaghan [20] had originally derived the “signal” based
+                                                                          369   artificial viscosity by using a loose analogy with Rie-
+                                                                        370   mann solvers. In fact, this viscosity can be interpreted
+             ∗                      va + vb   ul + ur
+331         vab = u∗ab r̂ab +               −         r̂ab        (24)    371   as the diffusive contributions from an appropriate Rie-
+                                       2         2
+                                                                          372   mann solver (see Section 3.2). Hitherto, GSPH imple-
+                                                                          373   mentations [21,13,22,6] have relied on the solution to the
+332   where we have assumed s∗ab = 0 for simplicity [21]. Note
+                                                                          374   exact Riemann problem to determine this intermediate
+333   that the bracketed term is perpendicular to the inter-
+                                                                          375   state. The exact solvers are robust but require iterative
+334   action vector r̂ab , and is therefore identically zero in
+                                                                          376   root finding techniques that are computationally ineﬀi-
+335   Eq. (22b).
+                                                                          377   cient when compared with non-iterative approximate
+336        The Vab terms depend on the kind of interpolation
+                                                                          378   Riemann solvers. Moreover, exact solutions to the Rie-
+337   used for the specific volume in the local coordinate sys-
+                                                                          379   mann problem are not available for complex equations
+338   tem, whichcan be either a linear or cubic spline interpo-
+                                                                          380   of state and/or multi-material problems. This further
+339   lation as originally proposed by Inutsuka [21]. Cha and
+                                                                          381   motivates the need for approximate Riemann solvers.
+340   Whitworth [23] andrecently, Iwasaki and Inutsuka [13]
+                                                                          382   We expect the approximate solution to work for most,
+341   have suggested the relatively simple approximation
+                                                                          383   if not all scenarios and for general equations of state.
+                                                                          384   Furthermore, the approximate solver should introduce
+         ∇W (x − xa )W (x − xb ) − ∇W (x − xb )W (x − xa )                385   the necessary and suﬀicient dissipation, thereby keeping
+       ≈∇(x − xa )δ(x − xb ) − ∇W (x − xb )δ(x − xa )                     386   GSPH artificial-viscosity-free. We have several choices
+342                                                        (25)           387   for the solver which have been used in the CFD commu-
+343   which, when used in Eq. (18b) readily gives the evolution           388   nity for hyperbolic systems of conservation laws [25,42-
+344   equations as                                                        389   44,31,29,26,33,32]. The approximate Riemann solvers
+      6
+
+390   we consider for coupling with the GSPH scheme are de-        426   further developed into a numerical scheme by Einfeldt.
+391   scribed next.                                                427   The intermediate pressure and velocity at the interface
+                                                                   428   is given by
+392            3. THE RIEMANN PROBLEM AND
+                 APPROXIMATE RIEMANN SOLVERS                                         λR FL − λL FR + λL λR (UR − UL )
+393
+                                                                   429        F∗ =                                    ,         (32)
+                                                                                                 λR − λ L
+394       The equations of SRHD in Lagrangian variables are
+395   given as                                                     430   where λL and λR are estimates for the minimum and
+396                       Ut + Fξ = 0,                 (27)        431   maximum signal speeds. The intermediate states are
+      with                                                         432   given as
+397                                            
+                             V          −u                                     λR pL − λL pR + λL λR (qR − qL )
+                                                                       p∗ =                                 ,               (33)
+398                     U = q,    F = p                (28)    433
+                                                                                           λ R − λL
+                             ê              pu                                 1 λR pL uL − λL pR uR + λL λR (êR − êL )
+                                                                   434     u∗ = ∗                                          .    (34)
+                                              d     ∂     ∂                    p                 λ R − λL
+399   where q = ĥΓu, the material derivative dt = ∂t +u· ∂ξ ,ξ
+400   is the mass coordinate related to the spatial coordinate     435   For our calculations, we use the following
+401   x, through the transformation dξ = Ddx. The system
+402   is hyperbolic with eigenvalues                                                   λL = max (λ1 (UL ), λ1 (UR )) ,
+                                                                   436                                                          (35)
+                 ρcs                            ρcs                                    λR = min (λ3 (UL ), λ3 (UR )) .
+403    λ1 = −             , λ2 = 0, λ3 =                , (29)
+              Γ(1 − ucs )                   Γ(1 + ucs )            437         3.3. HLLC (Harten–Lax–van Leer contact)
+                 r                                                 438                 approximate Riemann solver
+                   1 ∂p
+404   where cs =   ĥ ∂ρ
+                           . Besides, we can find a useful ex-     439        ?
+                            s
+                                               γ                              The HLLC solver was introduced by Toro et al. as
+405
+           q for an isentropic process using pτ = constant,
+      pression                                                     440
+
+406
+              γp
+      cs = ρĥ .                                                   441   a 3-wave approximate Riemann solver that had better
+                                                                   442   resolution of the contact discontinuity. The intermediate
+                                                                                        ∗                                  ∗
+407                   3.1. Rusanov Riemann Solver                  443   state fluxes FK   may be expressed in terms of UK   from
+                                                                   444   the Rankine-Hugoniot jump conditions:
+408        The Rusanov Riemann solver is perhaps the most
+409   eﬀicient of the approximate Riemann solvers. It can be       445
+                                                                            ∗
+                                                                           DK = DK (SK − uK )/(SK − S∗ ),                      (36a)
+      intuitively understood as a flux contribution that results
+                                                                            p∗K = pK + DK∗ ∗
+410
+                                                                   446                    qK (SK − S∗ ) − DK qK (SK − uK )
+411   from an unstable centered approximation and a stabi-
+                                                                                            ∗
+412   lizing diffusive contribution                                447          = pK + DK (qK − qK )(SK − uK ).          (36b)
+                                                                          ∗                ∗ ∗
+                                                                   448   pK S∗ = pK uK + DK êK (SK − S∗ ) − DK êK (SK − uK )
+                  1
+                  ∗
+413            F = [FL + FR − λmax (UR − UL )] ,           (30)    449          = pK uK + DK (ê∗K − êK )(SK − uK ).    (36c)
+                  2
+414   where λmax =        max(λM (UL ), λM (UR )), λM =            450   where K = L, R refer indifferently to the left (L) or right
+                             ρcs                                         (R) states,
+415   max(|λ1 |, |λ3 |) =              is the maximum (La-         451
+
+                         Γ(1 − |u|cs )
+                                                                                                             ∗
+      grangian) wave speed at the interface.        Eﬀiciency                                              qK
+                                                                                        S∗ = u∗K =
+416
+                                                                   452
+                                                                                                                  ∗ .           (37)
+417   though, comes at a price of being highly diffusive. The                                        ê∗K + p∗K /DK
+418   intermediate pressure and the product with velocity,
+419   computed from Eq. (30) are                                   453   If one combines the last of (36c) together with the sec-
+                                                                   454   ond one, the following expression giving S∗ in terms of
+              1                                                          p∗K may be obtained:
+          p∗ =
+                                                                   455
+                [pL + pR − λmax (qR − qL )] ,
+              2
+420
+                1                                          (31)                            p∗K − pK + DK qK (SK − uK )
+          u∗ = ∗ [pL uL + pR uR − λmax (êR − êL )] .             456              S∗ =
+                                                                                           DK êK SK − DK qK + p∗K SK
+                                                                                                                       .        (38)
+              2p
+
+421       3.2. HLL (Harten–Lax–van Leer) approximate               457        The expressions for the intermediate pressure and
+422                       Riemann solver                           458   velocity can be written as
+423       A theoretical approximate Riemann solver which                          λ∗ (λK UK − FK ) + λK (pK )FK + λR λL (UR − UL )
+      assumes that two waves emanate from the Riemann                    F ∗K =                                                    ,
+424                                                                                                   λR − λ L
+425   problem was proposed by Harten, Lax and van Leer and         459                                                     (39)
+                                                                                                                                            7
+
+                                                                         498   with a constant time step. Eqs. (20a), (20b) and (20c),
+                    SL = max (S1 (UL ), S1 (UR )) ,                      499   the value of van+1 can be derived by solving the linear
+460                                                              (40)
+                    SR = min (S3 (UL ), S3 (UR )) .                      500   system, where Van+1 , qan+1 , ên+1
+                                                                                                               a   serve as the system’s
+461   with                                                               501   input parameters. Subsequently, the equation for xn+1 a
+                    cs                                       cs          502   can be given as
+      S1 = u−                ,     S2 = u,    S3 = u+                .
+                Γ (1 − ucs )
+                 2                                       2
+                                                        Γ (1 + ucs )
+462                                                    (41)
+          An HLLC approximate Riemann solver in La-                                                             ∆t n
+463
+                                                                         503                  xn+1
+                                                                                               a   = xna +        (v + van+1 )           (44a)
+464   grangian coordinates which has zero dissipation for                                                       2 a
+465   pure convection was proposed by G. Ball for his Free-
+466   Lagrange method.
+                                                                         504   The smoothing lengths are determined from the particle
+467           3.4. Roe’s approximate Riemann solver                      505   positions using two parameters (k ≈ 1, Csmooth = 2), in
+468               3.5. Generalized Riemann solver                        506   the following three step process
+
+469                  4. NUMERICAL RESULTS
+470        In this section, we evaluate the performance of                                    X
+471   GSPH coupled with different approximate Riemann                    507         Da∗ =             Mb Wab (xa − xb , Csmooth hna )   (45a)
+472   solvers which were introduced in Section 3. We are in-                                 b∈N (a)
+473   terested in solving the Euler equations of compressible                                 1
+                                                                                           Ma d
+474   gas-dynamics with an ideal gas equation of state. We               508       hn+1 =k                                               (45b)
+      can therefore compare the results using the approximate
+                                                                                    a
+                                                                                           Da∗
+475
+                                                                                          X
+476   Riemann solvers with the van Leer [45] exact Riemann               509      Dan+1 =     Mb Wab (xa − xb , hn+1
+                                                                                                                 a   ).                  (45c)
+477   solver. The problems comprise a test suite that has been                               b∈N (a)
+478   used previously [24, 4, 23, 55, 20] to assess the robust-
+479   ness and accuracy of numerical schemes for compressible
+480   hydrodynamics.                                                     510        While displaying the results, we plot the particle
+481        For the GSPH results, we use Eqs. (15) with a sec-            511   weights to avoid any additional smoothing. For the den-
+482   ond order reconstruction of the primitive variables (ρ, v,         512   sity map for the 2D Riemann problem in Section 5.7, we
+483   p) and the original monotonicity algorithm proposed by             513   interpolate the density of the particles onto a fixed grid
+484   Inutsuka [21]. The gradients of the primitive variables            514   using the Gaussian kernel.
+485   are estimated following Iwasaki and Inutsuka [13]
+
+                       X
+486      (∇D)a =                 Mb ∇a Wab (ha )                (42a)
+                     b∈N (xa )
+                       X         Mb
+487      (∇Q)a =                    (Qb − Qa )∇a Wab (ha )     (42b)
+                     b∈N (xa )
+                                 Db                                      515                    ACKNOWLEDGMENTS
+                                                                         516   The second author is supported by NSFC
+488   for Q = (u, v, p). Although Eqs. (15) permit the use
+                                                                         517   (No. 12201585), the Opening Project of Joint Lab-
+489   of any arbitrary kernel function, we find that the Gaus-
+                                                                         518   oratory for Planetary Science and Supercomputing
+490   sian kernel is the most accurate. Unless otherwise men-
+                                                                         519   (No. CSYYGS-QT-2024-13), the China Scholarship
+491   tioned, we use the Gaussian kernel Eq. (14) in all our
+                                                                         520   Council and the High-performance Computing Plat-
+492   calculations. The equations of motion are integrated
+                                                                         521   form of China University of Geosciences Beijing.
+493   using
+
+
+494                 qan+1 = qan + ∆tq̇a                         (43a)
+                                                                         522                 AUTHOR CONTRIBUTIONS
+495                 ên+1
+                      a   = êna + ∆tê˙ a                     (43b)
+                                                                       523        All authors contributed equally to the Terra Mater
+            dê d⃗q              dê          q
+                                             d⃗
+496    ⃗·
+       v       −     ·v⃗ =v ⃗·       −v ⃗ ·(    ·v
+                                                 ⃗)             (43c)    524   collaboration.
+            dt   dt              dt          dt
+                                     q
+                                  1 d⃗       v
+                                         ĥ d⃗             v
+                                                          d⃗
+497                          =         −          v · q⃗)
+                                               − (⃗          (43d)
+                                   2
+                                  Γ dt   Γ dt             dt             525       Software: PySPH (P. Ramachandran et al. 2021)
+      8
+
+
+526                                                                   APPENDIX
+
+
+527           A. A HYBRID NEWTON-RAPHSON METHODS FOR RECOVERING PRIMITIVE VARIABLES
+528       In this appendix, we briefly introduce three eﬀicient Newton-Raphson (NR) methods for robustly recovering
+529   primitive variables from conservative variables in C. Cai et al. (2024).
+530   Algorithm A.1 (NR-I method). The NR iteration reads
+                                                                                   ϕ (χn )
+531                                                         χn+1 = χn −                                                                     (A1)
+                                                                                   ϕ′ (χn )
+532   with χ0 given by                               
+                                                     0,                                       if c2 > 0,
+                                                             p
+                                              χ0 =                                                                                          (A2)
+                                                      −3c3 + 9c3 − 24c2 ,
+533                                                              2
+                                                                                               otherwise,
+                                                              12
+534   where
+535                                             ϕ(χ) := c0 + c1 χ + c2 χ2 + c3 χ3 + χ4 ,                                                    (A3)
+536   with                                                              
+                                           c0 = q 2 − ê2 q 2 − ê2 + 1 (γ − 1)2 ,
+                                          
+                                          c = 2ê(2 − γ) q 2 − ê2  (γ − 1) − 2ê(γ − 1)2 ,
+                                          
+                                              1
+537                                                                                                                                        (A4)
+                                          
+                                           c 2 = ê
+                                                     2
+                                                       γ 2 − 6γ + 6 + 2q 2 (γ − 1) − (γ − 1)2 ,
+                                          
+                                          
+                                            c3 = 2ê(2 − γ).
+538        The iteration sequence {χn }n⩾0 generated by this algorithm converges monotonically to χ(U ). When using the
+539   NR method to solve ϕ(χ) = 0, oscillations may occur when the value of ϕ(χn ) is very close to zero. In addition to
+540   the standard stopping criterion |ϕ(χn )| < εtarget (εtarget denotes the target accuracy, set as 1014 ), we also include such
+541   oscillations as a termination criterion in our computations.
+542   Algorithm A.2 (NR-II method). The NR iteration reads
+                                                                                   ψ (χn )
+543                                                         χn+1 = χn −                                                                     (A5)
+                                                                                   ψ ′ (χn )
+544   with p0 given by                                            (
+                                                                      0,      if q 2 ⩾ ê2 − ê,
+545                                                    χ0 =                                                                                 (A6)
+                                                                      χuc ,   otherwise,
+546   where                                                                                 
+                                                                                      χ        p
+547
+                                                              2
+                                ψ(χ) := (ê + χ)Φ(χ) = q + (ê + χ)                      − ê + (ê + χ)2 − q 2 ,                           (A7)
+                                                                                     γ−1
+548   and                                              r                                                                            !
+                                     1                                                     h                    p               i
+549                           χuc :=     (γ − 2)ê +       (2 − γ)2 ê2 − 4(γ − 1)             (q 2 − ê2 ) +       ê2 − q 2           .   (A8)
+                                     2
+
+550      This algorithm requires taking a square root at each iteration to evaluate ψ(χ) and ψ ′ (χ), which leads to slower
+551   computation speed.
+      Algorithm A.3 (Hybrid NR).
+                              
+                               Adopt Algorithm A.1, if γ ⩾ 1 + ε1 and                                   1
+                                                                                                                 ⩾ ε2
+552                                                                                                  ê2 − q 2                              (A9)
+                                     
+                                         Adopt Algorithm A.2, otherwise,
+
+553   where ε1 ∈ (0, 1) and ε2 ∈ (0, 1) are two small positive numbers. In this paper, we set ε1 = 0.01 and ε2 = 10−4 .
+                                                                                                                              9
+
+554        When ϕ(χ) is not ill-conditioned, this hybrid approach switches to Algorithm A.1, which exhibits fast convergence
+555   and high accuracy with lower computational cost, since its monotonic convergence allows for a simpler and more
+556   effective stopping criterion. And when ϕ(χ) is ill-conditioned, the hybrid method switches to Algorithm A.2, which
+557   does not suffer from the ill-conditioned issue and always provides higher accuracy. Overall, this hybrid NR method
+558   effectively combines the advantages of both NR-I and NR-II methods and circumvents their individual limitations,
+559   thereby achieving both fast convergence and high accuracy.
+
+560                                 B. RELATION TO THE SPH ARTIFICIAL VISCOSITY
+
+
+
+                                                          REFERENCES
+561   Cai, C., Qiu, J., & Wu, K. 2024, Journal of Computational   567   Wu, K., & Tang, H. 2015, Journal of Computational
+562     Physics, 498, 112669, doi: 10.1016/j.jcp.2023.112669
+563   Chen, Y., & Wu, K. 2022, Journal of Computational           568     Physics, 298, 539, doi: 10.1016/j.jcp.2015.06.012
+564     Physics, 466, 111398, doi: 10.1016/j.jcp.2022.111398
+565   Ramachandran, P., Bhosale, A., Puri, K., et al. 2021, ACM
+566     Trans. Math. Softw., 47, 34:1, doi: 10.1145/3460773
+
