@@ -15,12 +15,15 @@ def _safe(v=0.0, floor=1e-14):
 
 
 def _rel_char_speeds(u=0.0, cs=0.0, result=[0.0, 0.0]):
-    # Relativistic eigenvalues lambda_\pm = (u +- cs)/(1 +- u*cs)
+    # Relativistic Lagrangian eigenvalues:
+    # lambda_1 = -cs / (Gamma * (1 - u*cs))
+    # lambda_3 =  cs / (Gamma * (1 + u*cs))
     uc = u * cs
     den_p = _safe(1.0 + uc)
     den_m = _safe(1.0 - uc)
-    result[0] = (u - cs) / den_m
-    result[1] = (u + cs) / den_p
+    gm = 1.0 / ((1.0 - u*u) if (1.0 - u*u) > 1e-12 else 1e-12) ** 0.5
+    result[0] = -cs / (gm * den_m)
+    result[1] = cs / (gm * den_p)
 
 
 def riemann_solve_rel(

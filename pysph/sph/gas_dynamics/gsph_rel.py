@@ -77,7 +77,9 @@ class GSPHAccelerationRel(Equation):
                 cs2_r = 1.0 - 1e-12
             cs_r = cs2_r**0.5
 
-        # Local relativistic characteristic speeds.
+        # Local relativistic characteristic speeds in Lagrangian variables:
+        # lambda_1 = -cs / (Gamma * (1 - u*cs)),
+        # lambda_3 =  cs / (Gamma * (1 + u*cs)).
         uc_l = u_l * cs_l
         uc_r = u_r * cs_r
         den_lp = 1.0 + uc_l
@@ -93,10 +95,12 @@ class GSPHAccelerationRel(Equation):
         if abs(den_rm) < 1e-14:
             den_rm = 1e-14 if den_rm >= 0.0 else -1e-14
 
-        lam_lm = (u_l - cs_l) / den_lm
-        lam_lp = (u_l + cs_l) / den_lp
-        lam_rm = (u_r - cs_r) / den_rm
-        lam_rp = (u_r + cs_r) / den_rp
+        gm_l = 1.0 / max((1.0 - u_l*u_l), 1e-12)**0.5
+        gm_r = 1.0 / max((1.0 - u_r*u_r), 1e-12)**0.5
+        lam_lm = -cs_l / (gm_l * den_lm)
+        lam_lp = cs_l / (gm_l * den_lp)
+        lam_rm = -cs_r / (gm_r * den_rm)
+        lam_rp = cs_r / (gm_r * den_rp)
 
         # Rusanov (0) or HLL/HLLC(fallback-to-HLL).
         if self.rsolver == 0:

@@ -48,7 +48,7 @@ except ModuleNotFoundError:
 dim = 1
 gamma = 5.0/3.0
 gamma1 = gamma - 1.0
-dt = 1e-4
+dt = 1e-5
 tf = 0.5
 
 
@@ -57,15 +57,23 @@ class SodShockTubeRel(ShockTubeSetup):
         super(SodShockTubeRel, self).__init__(*args, **kwargs)
         # Safe defaults so create_scheme() can be called before
         # consume_user_options().
-        self.hdx = 1.2
-        self.nl = 640
-        self.dscheme = "constant_mass"
+        self.hdx = 1.0
+        self.nl = 800
+        self.dscheme = "constant_volume"
+        # Debug controls for step-by-step diagnostics.
+        self._dbg_init_done = False
+        self._dbg_first_step_pre_done = False
+        self._dbg_first_step_post_done = False
+        self._dbg_probe_orig_id = None
+        self._dbg_pre_probe = {}
 
     def initialize(self):
-        # Problem setup from the provided figure:
-        # x in [0, 1], discontinuity at x=0.5, t in [0, 0.5].
-        self.xmin = 0.0
-        self.xmax = 1.0
+        # Computational domain is extended to reduce boundary-kernel artifacts.
+        # Physical window for comparison remains x in [0, 1].
+        self.xmin = -0.5
+        self.xmax = 1.5
+        self.plot_xmin = 0.0
+        self.plot_xmax = 1.0
         self.x0 = 0.5
         self.rhol = 1.0
         self.rhor = 0.125
@@ -75,17 +83,22 @@ class SodShockTubeRel(ShockTubeSetup):
         self.ur = 0.5
 
     def add_user_options(self, group):
-        group.add_argument("--hdx", action="store", type=float, dest="hdx", default=1.2)
-        group.add_argument("--nl", action="store", type=float, dest="nl", default=640)
+        group.add_argument("--hdx", action="store", type=float, dest="hdx", default=1.0)
+        group.add_argument("--nl", action="store", type=float, dest="nl", default=800)
         group.add_argument(
             "--dscheme", choices=["constant_mass", "constant_volume"],
-            dest="dscheme", default="constant_mass"
+            dest="dscheme", default="constant_volume"
         )
 
     def consume_user_options(self):
         self.nl = int(self.options.nl)
         self.hdx = self.options.hdx
         self.dscheme = self.options.dscheme
+        if self.rank == 0:
+            print(
+                "[DEBUG:resolution] using nl=%d, hdx=%.3f (target: reduce right-shock ringing and sharpen discontinuities)"
+                % (self.nl, self.hdx)
+            )
         self.dxl = (self.x0 - self.xmin) / self.nl
         if self.dscheme == 'constant_mass':
             ratio = self.rhor / self.rhol
@@ -125,22 +138,153 @@ class SodShockTubeRel(ShockTubeSetup):
         f.chi[:] = p / numpy.maximum(D, 1e-14)
         f.gamma_ad[:] = gamma
 
+        # Debug: validate initialized states near x=0.25, 0.5, 0.75.
+        if self.rank == 0 and (not self._dbg_init_done):
+            print("\n[DEBUG:init] Problem-1 target states:")
+            print("  Left : rho=1.0, u=0.5, p=1.0")
+            print("  Right: rho=0.125, u=0.5, p=0.1")
+            targets = [0.25, 0.50, 0.75]
+            for xt in targets:
+                idx = int(numpy.argmin(numpy.abs(f.x - xt)))
+                side = "left" if f.x[idx] <= self.x0 else "right"
+                expected = "left-state" if xt < self.x0 else (
+                    "right-state" if xt > self.x0 else "discontinuity-neighborhood"
+                )
+                print(
+                    "[DEBUG:init] probe x*=%.3f -> x=%.6f (%s, expect %s): "
+                    "rho_rest=%.6e, u=%.6e, p=%.6e, D=%.6e, q=%.6e, ehat=%.6e"
+                    % (
+                        xt, f.x[idx], side, expected,
+                        f.rho_rest[idx], f.u[idx], f.p[idx], f.rho[idx],
+                        f.qx[idx], f.ehat[idx]
+                    )
+                )
+            self._dbg_init_done = True
+
         return [f]
 
     def create_domain(self):
-        return DomainManager(
-            xmin=self.xmin, xmax=self.xmax, mirror_in_x=True, n_layers=2
-        )
+        # Open boundaries; physical region of interest is interior [0, 1].
+        return None
 
     def configure_scheme(self):
         self.scheme.configure_solver(tf=self.tf, dt=self.dt)
 
     def create_scheme(self):
         kf = getattr(self, "hdx", 1.2)
+        # Explicitly lock the principal Riemann solver to Rusanov.
+        rsolver = 0
+        if self.rank == 0:
+            print("[DEBUG:solver] Using SRHD Riemann solver = Rusanov (rsolver=%d)" % rsolver)
         return GSPHRelScheme(
             fluids=['fluid'], solids=[], dim=dim, gamma=gamma,
-            kernel_factor=kf, rsolver=1, niter=20, tol=1e-8
+            kernel_factor=kf, rsolver=rsolver, niter=20, tol=1e-8
         )
+
+    def pre_step(self, solver):
+        # Debug only for first physical step.
+        if self.rank > 0 or self._dbg_first_step_pre_done:
+            return
+        pa = self.particles[0]
+        # Probe near discontinuity for stage diagnostics.
+        idx_mid = int(numpy.argmin(numpy.abs(pa.x - self.x0)))
+        self._dbg_probe_orig_id = int(pa.orig_idx[idx_mid])
+        self._dbg_pre_probe = {
+            "x": float(pa.x[idx_mid]),
+            "D": float(pa.rho[idx_mid]),
+            "h": float(pa.h[idx_mid]),
+            "rho_rest": float(pa.rho_rest[idx_mid]),
+            "u": float(pa.u[idx_mid]),
+            "p": float(pa.p[idx_mid]),
+            "D_min": float(pa.rho.min()),
+            "D_max": float(pa.rho.max()),
+            "h_min": float(pa.h.min()),
+            "h_max": float(pa.h.max()),
+        }
+        print(
+            "\n[DEBUG:step1:pre] t=%.6e dt=%.6e probe(orig_idx=%d): "
+            "x=%.6e, D=%.6e, h=%.6e, rho_rest=%.6e, u=%.6e, p=%.6e"
+            % (
+                solver.t, solver.dt, self._dbg_probe_orig_id,
+                self._dbg_pre_probe["x"], self._dbg_pre_probe["D"],
+                self._dbg_pre_probe["h"], self._dbg_pre_probe["rho_rest"],
+                self._dbg_pre_probe["u"], self._dbg_pre_probe["p"]
+            )
+        )
+        self._dbg_first_step_pre_done = True
+
+    def post_step(self, solver):
+        # Debug only for first physical step.
+        if self.rank > 0 or self._dbg_first_step_post_done:
+            return
+        pa = self.particles[0]
+
+        idxs = numpy.where(pa.orig_idx == self._dbg_probe_orig_id)[0]
+        if len(idxs) > 0:
+            idx = int(idxs[0])
+        else:
+            idx = int(numpy.argmin(numpy.abs(pa.x - self.x0)))
+
+        print(
+            "[DEBUG:step1:post] t=%.6e dt=%.6e probe(orig_idx=%d): "
+            "q(after cons)=%.6e, ehat(after cons)=%.6e, "
+            "u(after rec)=%.6e, p(after rec)=%.6e, x(after pos)=%.6e"
+            % (
+                solver.t, solver.dt, int(pa.orig_idx[idx]),
+                pa.qx[idx], pa.ehat[idx], pa.u[idx], pa.p[idx], pa.x[idx]
+            )
+        )
+
+        # Check if D/h were recomputed within this same step.
+        D_pre = self._dbg_pre_probe["D"]
+        h_pre = self._dbg_pre_probe["h"]
+        D_post = float(pa.rho[idx])
+        h_post = float(pa.h[idx])
+        D_same = abs(D_post - D_pre) <= 1e-14 * max(1.0, abs(D_pre))
+        h_same = abs(h_post - h_pre) <= 1e-14 * max(1.0, abs(h_pre))
+        print(
+            "[DEBUG:step1:Dh] within-step recompute check: "
+            "D_pre=%.6e, D_post=%.6e, h_pre=%.6e, h_post=%.6e"
+            % (D_pre, D_post, h_pre, h_post)
+        )
+        if D_same and h_same:
+            print("[DEBUG:step1:Dh] D/h unchanged in this step; D/h are recomputed in equation groups of the next solver cycle.")
+        else:
+            print("[DEBUG:step1:Dh] D/h changed within this step.")
+
+        # Step-1 end global diagnostics.
+        rho_min = float(pa.rho_rest.min())
+        rho_max = float(pa.rho_rest.max())
+        u_min = float(pa.u.min())
+        u_max = float(pa.u.max())
+        p_min = float(pa.p.min())
+        p_max = float(pa.p.max())
+        D_min = float(pa.rho.min())
+        D_max = float(pa.rho.max())
+        q_min = float(pa.qx.min())
+        q_max = float(pa.qx.max())
+        ehat_min = float(pa.ehat.min())
+        ehat_max = float(pa.ehat.max())
+        print(
+            "[DEBUG:step1:range] rho_rest[min,max]=[%.6e, %.6e], "
+            "u[min,max]=[%.6e, %.6e], p[min,max]=[%.6e, %.6e]"
+            % (rho_min, rho_max, u_min, u_max, p_min, p_max)
+        )
+        print(
+            "[DEBUG:step1:range] D[min,max]=[%.6e, %.6e], "
+            "q(min,max)=[%.6e, %.6e], ehat[min,max]=[%.6e, %.6e]"
+            % (D_min, D_max, q_min, q_max, ehat_min, ehat_max)
+        )
+
+        bad_rho = numpy.any(pa.rho_rest <= 0.0)
+        bad_p = numpy.any(pa.p <= 0.0)
+        bad_u = numpy.any(numpy.abs(pa.u) >= 1.0)
+        print(
+            "[DEBUG:step1:phys] any(rho<=0)=%s, any(p<=0)=%s, any(|u|>=1)=%s"
+            % (str(bool(bad_rho)), str(bool(bad_p)), str(bool(bad_u)))
+        )
+
+        self._dbg_first_step_post_done = True
 
     def post_process(self):
         try:
@@ -157,16 +301,33 @@ class SodShockTubeRel(ShockTubeSetup):
         data = load(self.output_files[-1])
         pa = data['arrays']['fluid']
 
-        x = pa.x
-        D = pa.rho
-        u = pa.u
-        p = pa.p
+        # Sort by x for consistent profiles and select physical window.
+        idx = numpy.argsort(pa.x)
+        x = pa.x[idx]
+        D = pa.rho[idx]
+        rho0 = pa.rho_rest[idx]
+        u = pa.u[idx]
+        p = pa.p[idx]
+        mask = (x >= self.plot_xmin) & (x <= self.plot_xmax)
+        x = x[mask]
+        D = D[mask]
+        rho0 = rho0[mask]
+        u = u[mask]
+        p = p[mask]
+
+        plt.plot(x, rho0, label='SRHD-GSPH')
+        plt.xlabel('x')
+        plt.ylabel(r'$\rho$')
+        plt.legend()
+        plt.xlim(self.plot_xmin, self.plot_xmax)
+        plt.savefig(os.path.join(self.output_dir, "density.png"), dpi=300)
+        plt.clf()
 
         plt.plot(x, D, label='SRHD-GSPH')
         plt.xlabel('x')
         plt.ylabel('D')
         plt.legend()
-        plt.xlim(self.xmin, self.xmax)
+        plt.xlim(self.plot_xmin, self.plot_xmax)
         plt.savefig(os.path.join(self.output_dir, "density_D.png"), dpi=300)
         plt.clf()
 
@@ -174,7 +335,7 @@ class SodShockTubeRel(ShockTubeSetup):
         plt.xlabel('x')
         plt.ylabel('u')
         plt.legend()
-        plt.xlim(self.xmin, self.xmax)
+        plt.xlim(self.plot_xmin, self.plot_xmax)
         plt.savefig(os.path.join(self.output_dir, "velocity.png"), dpi=300)
         plt.clf()
 
@@ -182,7 +343,7 @@ class SodShockTubeRel(ShockTubeSetup):
         plt.xlabel('x')
         plt.ylabel('p')
         plt.legend()
-        plt.xlim(self.xmin, self.xmax)
+        plt.xlim(self.plot_xmin, self.plot_xmax)
         plt.savefig(os.path.join(self.output_dir, "pressure.png"), dpi=300)
         plt.clf()
 
@@ -190,12 +351,14 @@ class SodShockTubeRel(ShockTubeSetup):
         numpy.savez(
             fname,
             # metadata
-            t=self.tf, gamma=gamma, xmin=self.xmin, xmax=self.xmax, x0=self.x0,
+            t=self.tf, gamma=gamma, xmin=self.plot_xmin, xmax=self.plot_xmax, x0=self.x0,
             # primitive
-            x=x, u=pa.u, v=pa.v, w=pa.w, p=pa.p, rho_rest=pa.rho_rest,
-            e=pa.e, cs=pa.cs, hhat=pa.hhat, gamma_rel=pa.gamma_rel,
+            x=x, u=u, p=p, rho_rest=rho0,
+            e=pa.e[idx][mask], cs=pa.cs[idx][mask],
+            hhat=pa.hhat[idx][mask], gamma_rel=pa.gamma_rel[idx][mask],
             # conservative
-            D=pa.rho, qx=pa.qx, qy=pa.qy, qz=pa.qz, ehat=pa.ehat, chi=pa.chi
+            D=D, qx=pa.qx[idx][mask], qy=pa.qy[idx][mask], qz=pa.qz[idx][mask],
+            ehat=pa.ehat[idx][mask], chi=pa.chi[idx][mask]
         )
 
 
