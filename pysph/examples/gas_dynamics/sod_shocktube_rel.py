@@ -301,51 +301,99 @@ class SodShockTubeRel(ShockTubeSetup):
         data = load(self.output_files[-1])
         pa = data['arrays']['fluid']
 
-        # Sort by x for consistent profiles and select physical window.
+        # 1) Sort by x and clip to physical window.
         idx = numpy.argsort(pa.x)
-        x = pa.x[idx]
-        D = pa.rho[idx]
-        rho0 = pa.rho_rest[idx]
-        u = pa.u[idx]
-        p = pa.p[idx]
-        mask = (x >= self.plot_xmin) & (x <= self.plot_xmax)
-        x = x[mask]
-        D = D[mask]
-        rho0 = rho0[mask]
-        u = u[mask]
-        p = p[mask]
+        x_sorted = pa.x[idx]
+        D_sorted = pa.rho[idx]
+        rho_sorted = pa.rho_rest[idx]
+        u_sorted = pa.u[idx]
+        p_sorted = pa.p[idx]
+        mask = (x_sorted >= self.plot_xmin) & (x_sorted <= self.plot_xmax)
+        x = x_sorted[mask]
+        D = D_sorted[mask]
+        rho0 = rho_sorted[mask]
+        u = u_sorted[mask]
+        p = p_sorted[mask]
 
-        plt.plot(x, rho0, label='SRHD-GSPH')
-        plt.xlabel('x')
-        plt.ylabel(r'$\rho$')
-        plt.legend()
-        plt.xlim(self.plot_xmin, self.plot_xmax)
-        plt.savefig(os.path.join(self.output_dir, "density.png"), dpi=300)
-        plt.clf()
+        # Ensure unique/monotone abscissa before interpolation.
+        x_uni, uni_idx = numpy.unique(x, return_index=True)
+        rho_uni = rho0[uni_idx]
+        u_uni = u[uni_idx]
+        p_uni = p[uni_idx]
+        D_uni = D[uni_idx]
 
-        plt.plot(x, D, label='SRHD-GSPH')
-        plt.xlabel('x')
-        plt.ylabel('D')
-        plt.legend()
-        plt.xlim(self.plot_xmin, self.plot_xmax)
-        plt.savefig(os.path.join(self.output_dir, "density_D.png"), dpi=300)
-        plt.clf()
+        # 2) Interpolate to a uniform fine grid for publication-quality curves.
+        n_plot = 1000
+        x_plot = numpy.linspace(self.plot_xmin, self.plot_xmax, n_plot)
+        rho_plot = numpy.interp(x_plot, x_uni, rho_uni)
+        u_plot = numpy.interp(x_plot, x_uni, u_uni)
+        p_plot = numpy.interp(x_plot, x_uni, p_uni)
+        D_plot = numpy.interp(x_plot, x_uni, D_uni)
 
-        plt.plot(x, u, label='SRHD-GSPH')
-        plt.xlabel('x')
-        plt.ylabel('u')
-        plt.legend()
-        plt.xlim(self.plot_xmin, self.plot_xmax)
-        plt.savefig(os.path.join(self.output_dir, "velocity.png"), dpi=300)
-        plt.clf()
+        # 3) Optional reference overlay interface (npz with keys: x, rho, u, p).
+        ref = None
+        ref_candidates = [
+            os.environ.get("SRHD_REF_NPZ", ""),
+            os.path.join(self.output_dir, "reference_rel.npz"),
+            os.path.join(self.output_dir, "exact_rel.npz"),
+        ]
+        for fref in ref_candidates:
+            if fref and os.path.isfile(fref):
+                try:
+                    ref_npz = numpy.load(fref)
+                    if all(k in ref_npz for k in ["x", "rho", "u", "p"]):
+                        r_idx = numpy.argsort(ref_npz["x"])
+                        xr = ref_npz["x"][r_idx]
+                        rr = ref_npz["rho"][r_idx]
+                        ur = ref_npz["u"][r_idx]
+                        pr = ref_npz["p"][r_idx]
+                        mref = (xr >= self.plot_xmin) & (xr <= self.plot_xmax)
+                        ref = dict(x=xr[mref], rho=rr[mref], u=ur[mref], p=pr[mref], file=fref)
+                        print("[DEBUG:plot] reference overlay enabled from:", fref)
+                        break
+                except Exception as exc:
+                    print("[DEBUG:plot] failed to read reference npz:", fref, "error:", exc)
 
-        plt.plot(x, p, label='SRHD-GSPH')
-        plt.xlabel('x')
-        plt.ylabel('p')
-        plt.legend()
-        plt.xlim(self.plot_xmin, self.plot_xmax)
-        plt.savefig(os.path.join(self.output_dir, "pressure.png"), dpi=300)
-        plt.clf()
+        # 4) Unified, publication-style 1x3 figure.
+        plt.rcParams.update({
+            "font.size": 12,
+            "axes.labelsize": 14,
+            "axes.titlesize": 15,
+            "legend.fontsize": 11,
+            "xtick.labelsize": 12,
+            "ytick.labelsize": 12,
+            "axes.linewidth": 1.1,
+        })
+        fig, axes = plt.subplots(1, 3, figsize=(15, 4.6), constrained_layout=True)
+        series = [
+            (axes[0], rho_plot, r"Density $\rho$", ref["rho"] if ref else None),
+            (axes[1], u_plot, r"Velocity $u$", ref["u"] if ref else None),
+            (axes[2], p_plot, r"Pressure $p$", ref["p"] if ref else None),
+        ]
+        for ax, y, ylab, yref in series:
+            ax.plot(x_plot, y, color="#1f77b4", lw=2.2, label="SRHD-GSPH")
+            if ref is not None:
+                ax.plot(ref["x"], yref, color="black", lw=1.8, ls="--", label="Reference")
+            ymin = float(y.min())
+            ymax = float(y.max())
+            if ref is not None and len(yref) > 0:
+                ymin = min(ymin, float(numpy.min(yref)))
+                ymax = max(ymax, float(numpy.max(yref)))
+            pad = 0.06 * max(ymax - ymin, 1e-12)
+            ax.set_xlim(self.plot_xmin, self.plot_xmax)
+            ax.set_ylim(ymin - pad, ymax + pad)
+            ax.set_xlabel("x")
+            ax.set_ylabel(ylab)
+            ax.grid(True, alpha=0.22, lw=0.7)
+            ax.legend(loc="best", frameon=True, framealpha=0.9)
+
+        png_file = os.path.join(self.output_dir, "profiles_1d_publication.png")
+        pdf_file = os.path.join(self.output_dir, "profiles_1d_publication.pdf")
+        fig.savefig(png_file, dpi=600, bbox_inches="tight")
+        fig.savefig(pdf_file, bbox_inches="tight")
+        plt.close(fig)
+        print("[DEBUG:plot] saved:", png_file)
+        print("[DEBUG:plot] saved:", pdf_file)
 
         fname = os.path.join(self.output_dir, 'results_rel.npz')
         numpy.savez(
@@ -354,10 +402,11 @@ class SodShockTubeRel(ShockTubeSetup):
             t=self.tf, gamma=gamma, xmin=self.plot_xmin, xmax=self.plot_xmax, x0=self.x0,
             # primitive
             x=x, u=u, p=p, rho_rest=rho0,
+            x_plot=x_plot, rho_plot=rho_plot, u_plot=u_plot, p_plot=p_plot,
             e=pa.e[idx][mask], cs=pa.cs[idx][mask],
             hhat=pa.hhat[idx][mask], gamma_rel=pa.gamma_rel[idx][mask],
             # conservative
-            D=D, qx=pa.qx[idx][mask], qy=pa.qy[idx][mask], qz=pa.qz[idx][mask],
+            D=D, D_plot=D_plot, qx=pa.qx[idx][mask], qy=pa.qy[idx][mask], qz=pa.qz[idx][mask],
             ehat=pa.ehat[idx][mask], chi=pa.chi[idx][mask]
         )
 
