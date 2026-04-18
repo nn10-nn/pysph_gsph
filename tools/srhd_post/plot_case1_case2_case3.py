@@ -1,6 +1,6 @@
 """Plot three 1D SRHD cases in publication style:
 - black solid line: reference (exact)
-- blue hollow circles: numerical particle solution (uniformly sampled)
+- dense filled markers: numerical particle solution (uniformly sampled)
 
 Important:
 - Sampling is ONLY for visualization clarity.
@@ -10,12 +10,22 @@ Important:
 from __future__ import annotations
 
 import argparse
+import sys
 from pathlib import Path
 from typing import Dict, Tuple
 
 import numpy as np
 
-from tools.srhd_post.case_definitions import CASES
+try:
+    from tools.srhd_post.case_definitions import CASES
+except ModuleNotFoundError:
+    # Allow direct execution:
+    #   python tools/srhd_post/plot_case1_case2_case3.py
+    this_file = Path(__file__).resolve()
+    repo_root = this_file.parents[2]
+    if str(repo_root) not in sys.path:
+        sys.path.insert(0, str(repo_root))
+    from tools.srhd_post.case_definitions import CASES
 
 
 def _load_num_result(path: Path, x_range: Tuple[float, float]) -> Dict[str, np.ndarray]:
@@ -90,12 +100,24 @@ def _load_ref_result(path: Path, x_range: Tuple[float, float]) -> Dict[str, np.n
     }
 
 
-def _compute_uniform_sample_indices(n: int, target_points: int | None) -> np.ndarray:
+def _compute_uniform_sample_indices(
+    n: int,
+    target_points: int | None,
+    plot_stride: int | None,
+    min_plot_points: int,
+    max_plot_points: int,
+) -> np.ndarray:
     if n <= 0:
         return np.array([], dtype=int)
+    if plot_stride is not None and int(plot_stride) > 1:
+        idx = np.arange(0, n, int(plot_stride), dtype=int)
+        if idx[-1] != n - 1:
+            idx = np.concatenate([idx, np.array([n - 1], dtype=int)])
+        return idx
+
     if target_points is None:
-        # Auto-target 40~80 points according to total particle count.
-        target_points = int(np.clip(round(n / 20.0), 40, 80))
+        # Auto-target dense GSPH-looking scatter (not sparse PINN-like markers).
+        target_points = int(np.clip(round(n / 8.0), min_plot_points, max_plot_points))
     target_points = int(np.clip(target_points, 1, n))
     if target_points == n:
         return np.arange(n, dtype=int)
@@ -109,13 +131,25 @@ def _plot_one_case(
     ref: Dict[str, np.ndarray],
     out_dir: Path,
     sample_points: int | None,
+    plot_stride: int | None,
+    min_plot_points: int,
+    max_plot_points: int,
+    num_marker: str,
+    num_marker_size: float,
+    num_color: str,
     dpi: int,
 ) -> None:
     import matplotlib
     matplotlib.use("Agg")
     from matplotlib import pyplot as plt
 
-    idx_sample = _compute_uniform_sample_indices(len(num["x"]), sample_points)
+    idx_sample = _compute_uniform_sample_indices(
+        n=len(num["x"]),
+        target_points=sample_points,
+        plot_stride=plot_stride,
+        min_plot_points=min_plot_points,
+        max_plot_points=max_plot_points,
+    )
 
     # Consistency checks (time/range).
     t_num = num.get("t", np.nan)
@@ -147,17 +181,27 @@ def _plot_one_case(
     for ax, (key, title) in zip(axes, items):
         # Reference: black solid line (continuous)
         ax.plot(ref["x"], ref[key], "k-", lw=1.8, label="Reference")
-        # Numerical: blue hollow circles (uniformly sampled)
-        ax.plot(
-            num["x"][idx_sample], num[key][idx_sample],
-            marker="o",
-            linestyle="None",
-            markerfacecolor="none",
-            markeredgecolor="blue",
-            markeredgewidth=1.1,
-            markersize=4.8,
-            label="SRHD-GSPH"
-        )
+        # Numerical: dense particle-like scatter (uniformly sampled, no line).
+        if num_marker == ".":
+            ax.plot(
+                num["x"][idx_sample], num[key][idx_sample],
+                marker=".",
+                linestyle="None",
+                color=num_color,
+                markersize=num_marker_size,
+                label="SRHD-GSPH"
+            )
+        else:
+            ax.plot(
+                num["x"][idx_sample], num[key][idx_sample],
+                marker=num_marker,
+                linestyle="None",
+                markerfacecolor=num_color,
+                markeredgecolor=num_color,
+                markeredgewidth=0.0,
+                markersize=num_marker_size,
+                label="SRHD-GSPH"
+            )
         ax.set_title(title)
         ax.set_xlabel("x")
         ax.set_xlim(case_meta["x1"], case_meta["x2"])
@@ -187,7 +231,7 @@ def _plot_one_case(
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Plot three 1D SRHD cases with exact reference (black line) "
-                    "and uniformly sampled numerical points (blue hollow circles)."
+                    "and uniformly sampled dense numerical scatter."
     )
     parser.add_argument(
         "--repo-root",
@@ -217,8 +261,45 @@ def main() -> None:
         "--sample-points",
         type=int,
         default=None,
-        help="Force number of sampled points for numerical markers. "
-             "Default: auto in [40, 80].",
+        help="Force exact sampled-point count for numerical markers. "
+             "If omitted, auto dense sampling is used.",
+    )
+    parser.add_argument(
+        "--plot-stride",
+        type=int,
+        default=None,
+        help="Uniform stride for sampling numerical particles (e.g. 3 means take every 3rd point). "
+             "This has priority over --sample-points.",
+    )
+    parser.add_argument(
+        "--min-plot-points",
+        type=int,
+        default=120,
+        help="Lower bound for auto sampled-point count.",
+    )
+    parser.add_argument(
+        "--max-plot-points",
+        type=int,
+        default=260,
+        help="Upper bound for auto sampled-point count.",
+    )
+    parser.add_argument(
+        "--num-marker",
+        type=str,
+        default=".",
+        help="Marker for numerical scatter (default '.').",
+    )
+    parser.add_argument(
+        "--num-marker-size",
+        type=float,
+        default=4.0,
+        help="Marker size for numerical scatter.",
+    )
+    parser.add_argument(
+        "--num-color",
+        type=str,
+        default="blue",
+        help="Color for numerical scatter.",
     )
     parser.add_argument(
         "--dpi",
@@ -254,6 +335,12 @@ def main() -> None:
             ref=ref,
             out_dir=fig_dir,
             sample_points=args.sample_points,
+            plot_stride=args.plot_stride,
+            min_plot_points=int(args.min_plot_points),
+            max_plot_points=int(args.max_plot_points),
+            num_marker=str(args.num_marker),
+            num_marker_size=float(args.num_marker_size),
+            num_color=str(args.num_color),
             dpi=args.dpi,
         )
 
@@ -262,4 +349,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

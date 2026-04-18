@@ -12,12 +12,22 @@ import argparse
 import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 from typing import Dict, Iterable
 
 import numpy as np
 
-from tools.srhd_post.case_definitions import CASES
+try:
+    from tools.srhd_post.case_definitions import CASES
+except ModuleNotFoundError:
+    # Allow direct execution:
+    #   python tools/srhd_post/generate_exact_solutions.py
+    this_file = Path(__file__).resolve()
+    repo_root = this_file.parents[2]
+    if str(repo_root) not in sys.path:
+        sys.path.insert(0, str(repo_root))
+    from tools.srhd_post.case_definitions import CASES
 
 
 def _write_rinput(path: Path, case: Dict[str, float]) -> None:
@@ -250,4 +260,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

@@ -21,7 +21,11 @@ python tools/srhd_post/plot_case1_case2_case3.py \
   --exact-dir postprocess/exact_riemann \
   --fig-dir postprocess/figures \
   --cases case1 case2 case3 \
+  --min-plot-points 140 \
+  --max-plot-points 280 \
+  --num-marker . \
+  --num-marker-size 4.0 \
+  --num-color blue \
   --dpi 600
 
 echo "[done] Outputs in postprocess/figures/"
-
