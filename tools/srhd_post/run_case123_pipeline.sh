@@ -23,9 +23,16 @@ python tools/srhd_post/plot_case1_case2_case3.py \
   --cases case1 case2 case3 \
   --min-plot-points 140 \
   --max-plot-points 280 \
+  --case3-point-scale 0.70 \
+  --focus-fraction 0.45 \
   --num-marker . \
   --num-marker-size 4.0 \
   --num-color blue \
+  --fig-width 14.8 \
+  --fig-height 5.1 \
+  --suptitle-fontsize 20 \
+  --suptitle-y 0.98 \
+  --subplot-top 0.86 \
   --dpi 600
 
 echo "[done] Outputs in postprocess/figures/"

@@ -41,3 +41,5 @@ It does **not** modify raw numerical data and is **not** used in error computati
 - Keep reference as black continuous line.
 - Plot numerical solution as dense scatter (`--num-marker .` by default), not connected lines.
 - Use `--plot-stride` or `--max-plot-points` to control density reproducibly.
+- For cleaner reflection-test panels, use `--case3-point-scale` (default `0.70`).
+- To avoid title overlap, adjust `--fig-height`, `--subplot-top`, `--suptitle-y`.
