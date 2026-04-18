@@ -1,0 +1,406 @@
+                                                Journal of Computational Physics 231 (2012) 2116–2139
+
+
+
+                                              Contents lists available at SciVerse ScienceDirect
+
+
+                                        Journal of Computational Physics
+                                       journal homepage: www.elsevier.com/locate/jcp
+
+
+
+
+A direct Eulerian GRP scheme for relativistic hydrodynamics:
+Two-dimensional case
+Zhicheng Yang, Huazhong Tang ⇑
+HEDPS, CAPT & LMAM, School of Mathematical Sciences, Peking University, Beijing 100871, PR China
+
+
+
+
+a r t i c l e        i n f o                        a b s t r a c t
+
+Article history:                                    This paper develops a direct Eulerian generalized Riemann problem (GRP) scheme for two-
+Received 9 August 2011                              dimensional (2D) relativistic hydrodynamics (RHD). It is an extension of the GRP scheme
+Received in revised form 18 November 2011           for one-dimensional (1D) RHDs [Z.C. Yang, P. He, H.Z. Tang, J. Comput. Phys. 230 (2011)
+Accepted 20 November 2011
+                                                    7964–7987] and the GRP scheme for the non-relativistic hydrodynamics [M. Ben-Artzi,
+Available online 2 December 2011
+                                                    J.Q. Li, G. Warnecke, J. Comput. Phys. 218 (2006) 19–43]. In order to derive the direct Eule-
+                                                    rian GRP scheme, the (local) GRP of the split 2D RHD equations in the Eulerian formulation
+Keywords:
+                                                    has to be directly resolved by using corresponding Riemann invariants and Rankine–
+Generalized Riemann problem scheme
+Riemann problem
+                                                    Hugoniot jump conditions so that the crucial and delicate Lagrangian treatment in the
+Riemann invariant                                   original GRP scheme [M. Ben-Artzi, J. Falcovitz, J. Comput. Phys. 55 (1984) 1–32] may be
+Rankine–Hugoniot jump condition                     avoided. An important difference of resolving the GRP of the split 2D RHD equations from
+Relativistic hydrodynamics                          the GRP of the 1D RHD equations or the non-relativistic hydrodynamical equations is com-
+                                                    ing from the fact that the ﬂow regions across the shock or rarefaction wave in the GRP of
+                                                    the split 2D RHD equations are nonlinearly coupled through the Lorentz factor which is
+                                                    also built in terms of the tangential velocities. It is a purely multi-dimensional relativistic
+                                                    feature. Several numerical examples are given to demonstrate the accuracy and effective-
+                                                    ness of the proposed 2D GRP scheme.
+                                                                                                           Ó 2011 Elsevier Inc. All rights reserved.
+
+
+
+
+1. Introduction
+
+   The generalized Riemann problem (GRP) scheme is a second-order accurate Godunov method in time and space and was
+originally devised by Ben-Artzi and Falcovitz [3] for one-dimensional (1D) system of the non-relativistic ﬂuid ﬂow by using a
+piecewise linear function to approximate the initial data and then analytically solving a local GRP at each cell interface so as
+to yield numerical ﬂuxes. Then the GRP scheme was extensively applied to a large variety of wave conﬁgurations in multi-
+dimensional problems, including the reactive ﬂow [7,2], compressible ﬂows with moving boundaries [14], etc. The compre-
+hensive description can be found in [4] and references therein. The derivation of the GRP scheme has two versions: the
+Lagrangian and the Eulerian. The latter is always derived by using the former. The main advantage of using the Lagrangian
+framework is that the contact discontinuity in each local wave pattern is always ﬁxed with speed zero and the rarefaction
+waves and/or shock waves are located on either side. However, the passage from the Lagrangian coordinate to the Eulerian is
+sometimes quite delicate, particularly for sonic cases and multi-dimensional applications. In order to efﬁciently deal with the
+difﬁculty, a direct Eulerian GRP scheme was developed for the shallow water equations [21] and for hyperbolic balance laws
+[6,5], which used the main ingredient of Riemann invariants to decompose the strong coupling of nonlinear waves into a
+form of their simple superposition so that the rarefaction waves could be analytically resolved in a quite straightforward
+
+
+ ⇑ Corresponding author. Tel.: +86 10 62757018; fax: +86 10 62751801.
+   E-mail addresses: yangzhicheng@foxmail.com (Z. Yang), hztang@math.pku.edu.cn (H. Tang).
+
+0021-9991/$ - see front matter Ó 2011 Elsevier Inc. All rights reserved.
+doi:10.1016/j.jcp.2011.11.026
+                                       Z. Yang, H. Tang / Journal of Computational Physics 231 (2012) 2116–2139            2117
+
+
+way. The numerical implementation is almost the same as that of the linearized Euler equations, and at each cell interface
+only a pair of linear algebraic equations are required to be solved. In [15,16], the direct Eulerian version was further com-
+bined with the adaptive moving mesh method [27] to improve the resolution as well as accuracy of numerical solutions with
+a few mesh points and reduce possible errors or oscillations. Recently, the direct Eulerian GRP scheme was successfully ex-
+tended to the 1D special relativistic hydrodynamical (RHD) equations in [17].
+    Relativistic hydrodynamics (RHD) plays a major role in many ﬁelds of modern physics e.g. astrophysics, high-energy and
+nuclear physics, etc. To simulate ﬂows near massive objects it would be necessary to modify the equations further to include
+the local curvature of space–time or the relativistic effect. The dynamics of the relativistic system requires solving highly
+nonlinear equations, rendering the analytic treatment of practical problems extremely difﬁcult. Wilson ﬁrst attempted to
+solve the general RHD equations in an Eulerian form by using the common method of ﬁrst-order backward space-differenc-
+ing technique and the Richtmyer–von Neumann artiﬁcial viscosity techniques for treating the convective terms in the equa-
+tions of motion [29,30]. After that, various shock-capturing methods with the exact or approximate Riemann solvers were
+developed for the RHDs. The two-shock approximation of Colella was extended to the relativistic regime in [1]. A similar
+work was given in [9], where all waves emanating from an initial discontinuity were treated as themselves discontinuous,
+in other words, the jump conditions are also approximated used for the rarefaction waves. The Roe solver was developed for
+the RHDs in [13]. The HLL (Harten–Lax–van Leer–Einfeldt) method and the ﬂux corrected transport algorithm in the context
+of the RHD equations were studied in [25,12]. An extension of the HLLC (Harten–Lax–van Leer-Contact) approximate Rie-
+mann solver for the RHDs was presented in [23]. A ﬂux-splitting method based on the spectral decomposition was extended
+to the RHDs in [11]. ENO (essentially non-oscillatory) based methods for the RHD system were studied in [10,32,28]. The
+piecewise parabolic method was proposed in [24]. An adaptive moving mesh method is recently developed for the 2D
+RHD equations in [17]. The readers are also referred to the early review article [22].
+    The paper is concerned with an extension of the GRP scheme for the 1D RHDs developed in [31] to the 2D RHD equations.
+The key step is to resolve the GRP of the split 2D RHD equations at each cell interface. An important difference from the GRP
+of the 1D RHD equations as well as the non-relativistic hydrodynamical equations comes from a purely multi-dimensional
+relativistic feature that the ﬂow regions across the shock or rarefaction wave in the GRP of the split 2D RHD equations are
+nonlinearly coupled through the Lorentz factor which is also built in terms of the tangential velocities.
+    The paper is organized as follows. Section 2 introduces some preliminaries and notations including several forms of the
+governing equations of the RHDs and the Riemann invariants as well as their total differentials. Section 3 develops the GRP
+scheme, whose outline is given in Section 3.1. The resolution of the (local) GRP of the split 2D RHD equations is presented in
+Section 3.2, where the rarefaction wave and the shock wave are resolved by using the Riemann invariants and the Rankine–
+Hugoniot jump conditions in Sections 3.2.1 and 3.2.2, respectively. As soon as they are done, the limiting values of the time
+derivatives of the solutions at the singularity point can be calculated (see Section 3.2.3). A special and simple case, the so-
+called acoustic case, is discussed in Section 3.2.4. The numerical experiments will be conducted in Section 4. Section 5 con-
+cludes the paper with several remarks.
+
+2. Preliminaries and notations
+
+  This section introduces the governing equations of the special relativistic hydrodynamics (RHD) and corresponding Rie-
+mann invariants as well as their total differentials.
+
+2.1. Governing equations
+
+   In modeling ﬂow at speeds where relativistic effects become important, space and time become intrinsically coupled and
+thus the governing equations of relativistic hydrodynamics (RHD) are more complicated. The covariant form of four-dimen-
+sional space–time relativistic hydrodynamical (RHD) equations is given as follows:
+      
+          @ a ðqua Þ ¼ 0;
+                  a                                                                                                       ð2:1Þ
+          @ a ðqhu ub þ pg ab Þ ¼ 0;
+where the Greek indices a and b run from 0 to 3, @ a ¼ @ xa stands for the covariant derivative, ua denotes the four-velocity
+vector, the paper restricts the metric tensor gab to the Minkowski tensor, i.e. (gab)44 = diag{1, 1, 1, 1}, q and p denote the
+rest-mass density and the kinetic pressure respectively, and h is the speciﬁc enthalpy deﬁned by
+                      p
+      h¼1þeþ              ;                                                                                               ð2:2Þ
+                      q
+here e is the speciﬁc internal energy. Throughout the paper, units in which the speed of light is equal to one will be used so
+                                                                   qﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃ
+                                                                                                         
+that xa = (t, x1, x2, x3)T and ua = c(1, v1, v2, v3)T, where c ¼ 1= 1  v 21 þ v 22 þ v 23 is the Lorentz factor.
+   An additional equation for the thermodynamical variables, the so-called equation of state, is needed to close the system
+(2.1). For an ideal gas, the equation of state can be expressed in the C – law form
+      p ¼ ðC  1Þqe;                                                                                                      ð2:3Þ
+2132                                       Z. Yang, H. Tang / Journal of Computational Physics 231 (2012) 2116–2139
+
+                                                                                                                     
+               @V     @V        @h          @u                   @v        @h @ q @h @p            @u                   @v
+       0¼          þu      ¼ cv    þ V c2 u    þ hcð1 þ v 2 c2 Þ      ¼ cv       þ        þ V c2 u    þ hcð1 þ v 2 c2 Þ      :
+                @t    @x        @t          @t                   @t        @ q @t @p @t            @t                   @t
+
+From it, we may obtain (3.62) by using the following identity:
+            
+        @V    @V
+           ¼         ;
+        @x    @x L=R
+
+which is obtained by using the fact that V is continuous across the left and right waves and DV
+                                                                                             Dt
+                                                                                                ¼ 0 at the both sides of the left/
+right wave respectively and kx  u – 0. The proof is completed. h
+
+
+4. Numerical experiments
+
+    This section will solve several initial value problems or initial-boundary-value problems of two-dimensional relativistic
+hydrodynamical (RHD) Eq. (2.4) to demonstrate the accuracy and effectiveness of the GRP scheme proposed in the last sec-
+tion. Unless otherwise stated, all computations will be restricted to the equation of state (2.3) with the adiabatic index C = 5/
+3, the slope limiter (3.4) with h = 1.5 in the initial reconstruction, and the CFL number of 0.24.
+
+Example 4.1 (Accuracy test problem).pThe
+                                      ﬃﬃﬃ  ﬁrst example is presented in [17] and describes a RHD sine wave propagating
+periodically in the domain X ¼ ½0; 2= 3  ½0; 2 at an angle of a = 30° with the x-axis. The initial date are taken as
+        qðx; y; 0Þ ¼ 1 þ 0:2 sin ð2pðx cos a þ y sin aÞÞ;
+        v 1 ðx; y; 0Þ ¼ 0:2; v 2 ðx; y; 0Þ ¼ 0;       pðx; y; 0Þ ¼ 1;
+so that the exact solution can be given as follows:
+        qðx; y; tÞ ¼ 1 þ 0:2 sin ð2pððx cos a þ y sin aÞ  ðv 1 cos a þ v 2 sin aÞtÞÞ;
+        v 1 ðx; y; tÞ ¼ 0:2; v 2 ðx; y; tÞ ¼ 0;      pðx; y; tÞ ¼ 1:
+We compute the solutions of the proposed GRP scheme up to time t = 2 on the different uniform meshes and give the numer-
+ical relative errors in the density and orders of the accuracy in Table 4.1. The results show that a second-order rate of con-
+vergence in L1- or L2-norm can be obtained even though the rate of convergence in L1-norm is only ﬁrst-order.
+
+
+Example 4.2 (2D Riemann problem 1). To verify the capability of the current GRP scheme in capturing complex 2D wave con-
+ﬁgurations, we will solve three 2D relativistic Riemann problems, a relativistic double Mach reﬂection problem, and two rel-
+ativistic shock-bubble interaction problems.
+   Several numerical simulations [26,19,18,20] have been done to verify the wave conﬁgurations of the 2D non-relativistic
+Riemann problems comprising four different constant states conjectured in [33], including almost all essential 2D physical
+phenomena such as shock reﬂections, the spiral formation (rolling up of slip lines), vortex-shock interactions, etc.
+Nevertheless, many mysteries are awaiting for understanding and discovery.
+   The initial data of the ﬁrst Riemann problem for V = (q, v1, v2, p)T are
+                     8
+                     >
+                     > ð0:5; 0:5; 0:5; 0:5ÞT ;         x > 0:5; y > 0:5;
+                     >
+                     >
+                     < ð1; 0:5; 0:5; 5ÞT ;              x < 0:5; y > 0:5;
+        Vðx; y; 0Þ ¼
+                     >
+                     > ð3; 0:5; 0:5; 5ÞT ;             x < 0:5; y < 0:5;
+                     >
+                     >
+                     :
+                       ð1:5; 0:5; 0:5; 5ÞT ;          x > 0:5; y < 0:5;
+which are about the interaction of four vortex sheets (contact discontinuities) with the same sign (the negative sign) for the
+ideal relativistic ﬂuid.
+   Fig. 4.1 displays the contour of the density logarithm at time t = 0.4 obtained by using the GRP scheme with 300  300
+uniform cells. It shows that those four initial vortex sheets interact each other to form a spiral with the low density around
+the center of the domain X = [0, 1]  [0, 1] as time increases. This is the typical cavitation phenomenon in gas dynamics.
+
+
+Table 4.1
+Example 4.1: The errors and convergence order for solutions of the GRP scheme at t = 2.
+
+  Number of cells               L1-error                 Order                L1-error                Order           L2-error   Order
+  25  25                       8.49e03                 –                    3.88e03                –               4.84e03   –
+  50  50                       3.17e03                 1.4229               9.87e03                1.9726          1.43e03   1.7568
+  100  100                     1.15e03                 1.4676               2.45e04                2.0138          4.08e04   1.8117
+  200  200                     4.35e04                 1.3957               5.73e05                2.0932          1.17e04   1.8063
+  400  200                     1.81e04                 1.2629               1.07e05                2.4255          3.32e05   1.8152
+                                       Z. Yang, H. Tang / Journal of Computational Physics 231 (2012) 2116–2139                                  2133
+
+
+Example 4.3 (2D Riemann problem 2). The initial data of the second Riemann problem are given as
+                   8
+                   >
+                   > ð1; 0; 0; 1ÞT ;                       x > 0:5; y > 0:5;
+                   >
+                   >
+                   < ð0:5771; 0:3529; 0; 4ÞT ;            x < 0:5; y > 0:5;
+      Vðx; y; 0Þ ¼
+                   >
+                   > ð1; 0:3529; 0:3529; 1ÞT ;           x < 0:5; y < 0:5;
+                   >
+                   >
+                   :
+                     ð0:5771; 0; 0:3529; 0:4ÞT ;          x > 0:5; y < 0:5;
+which are about the interaction of four rarefaction waves.
+   The computational domain X is taken as [0, 1]  [0, 1] divided into 300  300 uniform cells. Fig. 4.2 gives the contour of
+the density logarithm at time t = 0.4 obtained by using the GRP scheme. The result shows clearly that those four initial
+discontinuities ﬁrst evolve as four rarefaction waves and then interact each other and form two (almost parallel) curved
+shock waves perpendicular to the line x = y as time increases.
+
+
+Example 4.4 (2D Riemann problem 3). The initial data of the third Riemann problem are given as
+                   8
+                   >
+                   > ð0:035145216124503; 0; 0; 0:162931056509027ÞT ;                      x > 0:5; y > 0:5;
+                   >
+                   >
+                   < ð0:1; 0:7; 0; 1ÞT ;                                                  x < 0:5; y > 0:5;
+      Vðx; y; 0Þ ¼
+                   >
+                   > ð0:5; 0; 0; 1ÞT ;                                                    x < 0:5; y < 0:5;
+                   >
+                   >
+                   :
+                     ð0:1; 0; 0:7; 1ÞT ;                                                  x > 0:5; y < 0:5;
+where the left and bottom discontinuities are contact discontinuities and the top and right are two shock waves with the
+speed of 0.934563275373844.
+   Fig. 4.3 gives the contour of the density logarithm at time t = 0.4 within the domain X = [0, 1]  [0, 1] obtained by using
+the GRP scheme with 300  300 uniform cells. We see that four initial discontinuities interact each other and form a
+‘‘mushroom cloud’’ around the point (0.5, 0.5) as time increases.
+
+
+Example 4.5 (Double Mach reﬂection problem). The double Mach reﬂection problem of a strong shock is widely used to test
+non-relativistic hydrodynamic codes. Such problem has been extended to the ideal relativistic ﬂuid with the adiabatic index
+C = 1.4 within the domain X = [0, 4]  [0, 1], see [34,17]. Initially a right-moving shock with the speed of vs = 0.4984 is posi-
+tioned at x = 1/6, y = 0 and makes a 60° angle with the x-axis. Its left and right states are
+
+      V L ¼ ð8:564; 0:4247 sin 60 ; 0:4247 cos 60 ; 0:3808ÞT ;
+      V R ¼ ð1:4; 0; 0; 0:0025ÞT ;
+
+
+
+
+       Fig. 4.1. Example 4.2: the contour of the density logarithm log q at t = 0.4: 30 equally spaced contour lines from 4.00757 to 1.23246.
+2134                                    Z. Yang, H. Tang / Journal of Computational Physics 231 (2012) 2116–2139
+
+
+
+
+           Fig. 4.2. Example 4.3: the contour of the density logarithm log q at t = 0.4: 30 equally spaced contour lines from 1.38417 to 0.
+
+
+
+
+        Fig. 4.3. Example 4.4: the contour of the density logarithm log q at t = 0.4: 30 equally spaced contour lines from 3.34827 to 0.41181.
+
+
+
+and its exact position at time t is
+                    pﬃﬃﬃ 1
+                            
+       hðx; tÞ :¼    3 x      2v s t:
+                          6
+More precisely, the initial data are set by
+                      
+                          V L;   y > hðx; 0Þ;
+       Vðx; y; 0Þ ¼
+                          V R ; y < hðx; 0Þ:
+                                           Z. Yang, H. Tang / Journal of Computational Physics 231 (2012) 2116–2139                                    2135
+
+
+                    1
+
+
+
+
+                  0.5
+
+
+
+
+                    0
+                        0                          1                                   2                               3                 4
+
+
+
+
+Fig. 4.4. Example 4.5: the contour (top) and the schlieren image (bottom) of the density at t = 5.5, where there are 30 equally spaced contour lines from 1.4
+to 25.8083.
+
+
+
+
+The boundary conditions are speciﬁed as follows:
+                     8
+                     > V L;                      x ¼ 0;
+                     >
+                     >
+                     >
+                     > V L;                      y ¼ 0; x 6 1=6;
+                     >
+                     >
+                     >
+                     < ðq; v ; v ; pÞT ;
+                             1   2               y ¼ 0; x > 1=6;
+        Vðx; y; tÞ ¼
+                     >
+                     > V R ;                     x ¼ 4;
+                     >
+                     >
+                     >
+                     > V L;                      y ¼ 1; x < xs ;
+                     >
+                     >
+                     :
+                       V R;                      y ¼ 1; x > xs ;
+where xs solves the equation
+        hðx; tÞ ¼ 1:
+Fig. 4.4 displays the contour and the schlieren image of the density at t = 5.5 computed by using the GRP scheme with
+640  160 uniform cells. The ﬁne details of the complicated structure around the double-Mach region are clearly captured.
+
+
+Example 4.6 (Shock bubble interaction problem 1). The interaction between the shock wave and the bubble in non-relativ-
+istic hydrodynamics has been extensively studied by many authors, see e.g. [8]. It is extended to the relativistic hydrodynam-
+ics in [17]. The setup of the problem is as follows. The computational domain X = [0, 325]  [0, 90] is with two reﬂective
+boundaries at y = 0 and 90, and the ﬂuid states on two boundaries in x-direction are set to the left and right shock state,
+respectively. Initially, a left-moving relativistic straight shock wave is located at x = 265 with the left and right states
+                        (
+                            ð1; 0; 0; 0:05ÞT ;                                                              x < 265;
+        Vðx; y; 0Þ ¼                                                                                    T
+                            1:865225080631180; 0:196781107378299; 0; 0:15Þ ; x > 265:
+There is a cylindrical bubble centered at (215, 45) with the radius of 25 in front of the initial shock wave. The initial state of
+the ﬂuid within the bubble is taken as
+                                                    qﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃ
+        Vðx; y; 0Þ ¼ ð0:1358; 0; 0; 0:05ÞT ;         ðx  215Þ2 þ ðy  45Þ2 6 25;
+
+which is in a mechanical equilibrium with the surrounding ﬂuid and lighter than the ambient ﬂuid.
+   Fig. 4.5 shows the schlieren images of the density q at t = 90, 180, 270, 360, and 450, respectively, obtained by using the
+GRP scheme with 325  90 uniform cells. Those plots are clearly showing the dynamics of the interaction between the shock
+wave and the bubble. Moreover, the discontinuities are captured well and accurately; and at the same time, some small wave
+structures are also resolved clearly.
+2136                                 Z. Yang, H. Tang / Journal of Computational Physics 231 (2012) 2116–2139
+
+
+
+
+                       Fig. 4.5. Example 4.6: the schlieren images of the density at t = 90, 180, 270, 360, 450, respectively.
+
+
+
+Example 4.7 (Shock bubble interaction problem 2). This example is similar to the last one, but the present ﬂuid in the bubble
+is heavier than the ambient ﬂuid. Such difference will yield different ﬂow patterns around the bubble interface after its inter-
+acting with the shock. The setup of the problem is the same as that of Example 4.6, except for that the initial states of the
+ﬂuid in the bubble are replaced with
+                                               qﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃ
+       Vðx; y; 0Þ ¼ ð3:1538; 0; 0; 0:05ÞT ;     ðx  215Þ2 þ ðy  45Þ2 6 25:
+
+Fig. 4.6 gives the schlieren images of the density at t = 100, 200, 300, 400, and 500, respectively, obtained by the GRP scheme
+with 325  90 uniform cells. It shows obviously different wave patterns of the interaction between the shock and the bubble
+from the last one. The discontinuities and some small wave structures including the curling of the bubble interface are also
+resolved well and accurately.
+                                    Z. Yang, H. Tang / Journal of Computational Physics 231 (2012) 2116–2139                    2137
+
+
+
+
+                     Fig. 4.6. Example 4.7: the schlieren images of the density at t = 100, 200, 300, 400, 500, respectively.
+
+
+
+5. Conclusions
+
+    This paper proposed a two-dimensional (2D) extension of the direct Eulerian generalized Riemann problem (GRP) scheme
+for one-dimensional (1D) special relativistic hydrodynamics (RHD) in [31]. In order to derive the direct Eulerian GRP scheme,
+the (local) GRP of the split 2D RHD equations in the Eulerian formulation was directly resolved by using corresponding Rie-
+mann invariants and Rankine–Hugoniot jump conditions. The ﬂow regions across the shock or rarefaction wave in the GRP of
+the split 2D RHD equations are nonlinearly coupled through the Lorentz factor which is also built in terms of the tangential
+velocities. It is a purely multi-dimensional relativistic feature and an important difference from the GRP of the 1D RHD equa-
+tions as well as the non-relativistic hydrodynamical equations. Several numerical examples have been given to demonstrate
+the accuracy and effectiveness of the proposed GRP scheme. The extension of the direct Eulerian GRP scheme to the four-
+
