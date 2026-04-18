@@ -54,13 +54,56 @@ def _write_rinput(path: Path, case: Dict[str, float]) -> None:
     path.write_text("".join(lines), encoding="utf-8")
 
 
-def _ensure_solver_built(solver_dir: Path) -> Path:
-    exe = solver_dir / "riemann_rmhd"
-    if exe.exists():
-        return exe
-    print("[step] building Exact_Riemann_Solver...")
+def _find_existing_solver_dir(preferred: Path) -> Path:
+    """Find a valid Exact_Riemann_Solver directory."""
+    candidates = [
+        preferred,
+        Path("third_party/Exact_Riemann_Solver"),
+        Path("Exact_Riemann_Solver"),
+    ]
+    # Also try relative to repo root when script is run from other directories.
+    this_file = Path(__file__).resolve()
+    repo_root = this_file.parents[2]
+    candidates.extend([
+        repo_root / "third_party" / "Exact_Riemann_Solver",
+        repo_root / "Exact_Riemann_Solver",
+    ])
+
+    for c in candidates:
+        p = c.resolve()
+        if not p.exists():
+            continue
+        # Minimal validity check: executable OR known source file.
+        if (p / "riemann_rmhd").exists() or (p / "riemann_rmhd.f90").exists():
+            return p
+    raise FileNotFoundError(
+        "Could not locate Exact_Riemann_Solver directory.\n"
+        f"Tried candidates:\n  - " + "\n  - ".join(str(x.resolve()) for x in candidates) + "\n"
+        "Please clone it, e.g.:\n"
+        "  git clone https://github.com/bgiacoma/Exact_Riemann_Solver third_party/Exact_Riemann_Solver"
+    )
+
+
+def _compile_with_gfortran(solver_dir: Path) -> None:
+    srcs = [
+        "Interfaces.f90",
+        "initialdata.f90",
+        "quartic.f90",
+        "nrutil.f90",
+        "lubksb.f90",
+        "ludcmp.f90",
+        "postshock.f90",
+        "riemann_rmhd.f90",
+    ]
+    missing = [s for s in srcs if not (solver_dir / s).exists()]
+    if missing:
+        raise RuntimeError(
+            "Cannot fallback-compile with gfortran, missing source files:\n  - "
+            + "\n  - ".join(missing)
+        )
+    cmd = ["gfortran", "-ffree-line-length-none", *srcs, "-o", "riemann_rmhd"]
     proc = subprocess.run(
-        ["make"],
+        cmd,
         cwd=str(solver_dir),
         text=True,
         stdout=subprocess.PIPE,
@@ -70,10 +113,45 @@ def _ensure_solver_built(solver_dir: Path) -> Path:
     print(proc.stdout)
     if proc.returncode != 0:
         raise RuntimeError(
-            "Failed to build Exact_Riemann_Solver. Check compiler/gfortran on the server."
+            "gfortran fallback build failed.\n"
+            f"Command: {' '.join(cmd)}\n"
+            "Please ensure gfortran is installed and callable in PATH."
         )
+
+
+def _ensure_solver_built(solver_dir: Path) -> Path:
+    exe = solver_dir / "riemann_rmhd"
+    if exe.exists():
+        return exe
+
+    # Build path diagnosis.
+    has_makefile = any((solver_dir / n).exists() for n in ("Makefile", "makefile", "GNUmakefile"))
+    print(f"[step] building Exact_Riemann_Solver in: {solver_dir}")
+    if has_makefile:
+        proc = subprocess.run(
+            ["make"],
+            cwd=str(solver_dir),
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            check=False,
+        )
+        print(proc.stdout)
+        if proc.returncode != 0:
+            raise RuntimeError(
+                "Failed to build Exact_Riemann_Solver with make.\n"
+                f"solver_dir={solver_dir}\n"
+                "Check whether gfortran is installed and whether Makefile targets are valid."
+            )
+    else:
+        print("[warn] Makefile not found, trying direct gfortran fallback compilation...")
+        _compile_with_gfortran(solver_dir)
+
     if not exe.exists():
-        raise RuntimeError("Build finished but executable 'riemann_rmhd' was not produced.")
+        raise RuntimeError(
+            "Build finished but executable 'riemann_rmhd' was not produced.\n"
+            f"solver_dir={solver_dir}"
+        )
     return exe
 
 
@@ -227,15 +305,11 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    solver_dir = args.solver_dir.resolve()
+    solver_dir = _find_existing_solver_dir(args.solver_dir)
     out_dir = args.out_dir.resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    if not solver_dir.exists():
-        raise FileNotFoundError(
-            f"Solver directory not found: {solver_dir}. "
-            "Please clone https://github.com/bgiacoma/Exact_Riemann_Solver first."
-        )
+    print(f"[step] using solver_dir: {solver_dir}")
     exe = _ensure_solver_built(solver_dir)
 
     print("[step] generating exact/reference solutions...")
