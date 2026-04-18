@@ -172,6 +172,58 @@ def _sample_score(num: Dict[str, np.ndarray]) -> np.ndarray:
     return _norm(drho) + _norm(du) + _norm(dp)
 
 
+def _choose_legend_location(
+    ax,
+    x_ref: np.ndarray,
+    y_ref: np.ndarray,
+    x_num: np.ndarray,
+    y_num: np.ndarray,
+) -> str:
+    # Candidate locations ordered from usually clean to fallback.
+    candidates = [
+        "upper right", "upper left", "lower right", "lower left",
+        "center right", "center left", "upper center", "lower center",
+    ]
+
+    # Use a moderately sparse subset for robust and fast overlap scoring.
+    n_ref = len(x_ref)
+    n_num = len(x_num)
+    ref_step = max(n_ref // 300, 1)
+    num_step = max(n_num // 250, 1)
+    ref_pts = np.column_stack((x_ref[::ref_step], y_ref[::ref_step]))
+    num_pts = np.column_stack((x_num[::num_step], y_num[::num_step]))
+    ref_disp = ax.transData.transform(ref_pts)
+    num_disp = ax.transData.transform(num_pts)
+
+    best_loc = candidates[0]
+    best_score = None
+
+    for loc in candidates:
+        leg = ax.legend(loc=loc, frameon=False)
+        ax.figure.canvas.draw()
+        bbox = leg.get_window_extent(ax.figure.canvas.get_renderer())
+
+        x0, y0, x1, y1 = bbox.x0, bbox.y0, bbox.x1, bbox.y1
+        ref_in = (
+            (ref_disp[:, 0] >= x0) & (ref_disp[:, 0] <= x1) &
+            (ref_disp[:, 1] >= y0) & (ref_disp[:, 1] <= y1)
+        )
+        num_in = (
+            (num_disp[:, 0] >= x0) & (num_disp[:, 0] <= x1) &
+            (num_disp[:, 1] >= y0) & (num_disp[:, 1] <= y1)
+        )
+
+        # Numerical scatter occlusion is weighted slightly higher.
+        score = int(np.count_nonzero(ref_in)) + 2 * int(np.count_nonzero(num_in))
+        if best_score is None or score < best_score:
+            best_score = score
+            best_loc = loc
+
+        leg.remove()
+
+    return best_loc
+
+
 def _format_gamma(g: float) -> str:
     if abs(g - 5.0 / 3.0) < 1e-12:
         return "5/3"
@@ -191,6 +243,7 @@ def _plot_one_case(
     min_plot_points: int,
     max_plot_points: int,
     case3_point_scale: float,
+    case3_focus_fraction: float,
     focus_fraction: float,
     num_marker: str,
     num_marker_size: float,
@@ -212,9 +265,11 @@ def _plot_one_case(
     # while retaining higher density near discontinuities.
     local_min_points = int(min_plot_points)
     local_max_points = int(max_plot_points)
+    local_focus_fraction = float(focus_fraction)
     if case_key == "case3":
         local_min_points = max(60, int(round(local_min_points * case3_point_scale)))
         local_max_points = max(local_min_points, int(round(local_max_points * case3_point_scale)))
+        local_focus_fraction = float(case3_focus_fraction)
 
     idx_sample = _compute_uniform_sample_indices(
         n=len(num["x"]),
@@ -223,7 +278,7 @@ def _plot_one_case(
         min_plot_points=local_min_points,
         max_plot_points=local_max_points,
         score=score,
-        focus_fraction=focus_fraction,
+        focus_fraction=local_focus_fraction,
     )
 
     # Consistency checks (time/range).
@@ -241,7 +296,7 @@ def _plot_one_case(
         "font.size": 12,
         "axes.labelsize": 14,
         "axes.titlesize": 15,
-        "legend.fontsize": 11,
+        "legend.fontsize": 10.5,
         "xtick.labelsize": 12,
         "ytick.labelsize": 12,
         "axes.linewidth": 1.0,
@@ -254,7 +309,6 @@ def _plot_one_case(
         ("u", r"Velocity ($u$)"),
         ("p", r"Pressure ($p$)"),
     ]
-    legend_locs = {"rho": "upper right", "u": "upper right", "p": "lower right"}
     for ax, (key, title) in zip(axes, items):
         # Reference: black solid line (continuous)
         ax.plot(ref["x"], ref[key], "k-", lw=1.8, label="Reference")
@@ -288,7 +342,18 @@ def _plot_one_case(
         pad = 0.08 * max(y_max - y_min, 1e-12)
         ax.set_ylim(y_min - pad, y_max + pad)
         ax.grid(False)
-        ax.legend(loc=legend_locs[key], frameon=False)
+        legend_loc = _choose_legend_location(
+            ax=ax,
+            x_ref=ref["x"], y_ref=ref[key],
+            x_num=num["x"][idx_sample], y_num=num[key][idx_sample],
+        )
+        ax.legend(
+            loc=legend_loc,
+            frameon=False,
+            handlelength=1.9,
+            borderaxespad=0.35,
+            labelspacing=0.35,
+        )
 
     gamma_str = _format_gamma(case_meta["gamma"])
     fig.suptitle(
@@ -365,8 +430,14 @@ def main() -> None:
     parser.add_argument(
         "--case3-point-scale",
         type=float,
-        default=0.70,
+        default=0.62,
         help="Scale factor applied to [min,max]-plot-points for case3 to avoid over-dense plateau markers.",
+    )
+    parser.add_argument(
+        "--case3-focus-fraction",
+        type=float,
+        default=0.72,
+        help="Focus fraction for case3 sampling (higher keeps more points near discontinuities, fewer on plateaus).",
     )
     parser.add_argument(
         "--focus-fraction",
@@ -460,6 +531,7 @@ def main() -> None:
             min_plot_points=int(args.min_plot_points),
             max_plot_points=int(args.max_plot_points),
             case3_point_scale=float(args.case3_point_scale),
+            case3_focus_fraction=float(args.case3_focus_fraction),
             focus_fraction=float(args.focus_fraction),
             num_marker=str(args.num_marker),
             num_marker_size=float(args.num_marker_size),
