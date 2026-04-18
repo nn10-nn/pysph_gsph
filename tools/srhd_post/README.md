@@ -41,5 +41,26 @@ It does **not** modify raw numerical data and is **not** used in error computati
 - Keep reference as black continuous line.
 - Plot numerical solution as dense scatter (`--num-marker .` by default), not connected lines.
 - Use `--plot-stride` or `--max-plot-points` to control density reproducibly.
-- For cleaner reflection-test panels, use `--case3-point-scale` (default `0.70`).
+- For cleaner reflection-test panels, use `--case3-point-scale` (default `0.62`).
 - To avoid title overlap, adjust `--fig-height`, `--subplot-top`, `--suptitle-y`.
+
+## Final 2D case script (single formal run)
+
+For the final 2D thesis-quality figure/log bundle:
+
+- solver script:
+  - `pysph/examples/gas_dynamics/riemann2d_problem2_rel.py`
+  - outputs:
+    - main figure: `fig5-4-case4-2d.pdf/png`
+    - diagnostics: raw contour / contourf / pcolormesh
+    - reproducible fields: `case4_2d_plot_fields.npz`
+    - run metadata: `case4_2d_run_params.json` and `case4_2d_run_report.txt`
+
+- one-click launcher:
+  - `tools/srhd_post/run_case4_2d_final.sh`
+  - also saves terminal log to `postprocess/logs/`
+
+- no-rerun replot tool:
+  - `tools/srhd_post/replot_case4_2d_from_npz.py`
+  - use saved `case4_2d_plot_fields.npz` to tweak figure smoothness/levels
+  - useful when only plotting style needs adjustment
